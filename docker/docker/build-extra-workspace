@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+if [[ $# -lt 1 ]]; then
+    echo "Usage: build-extra-workspace /absolute/container/path/to/workspace" >&2
+    exit 2
+fi
+
+WS="$1"
+shift
+if [[ ! -d "$WS/src" ]]; then
+    echo "ROS workspace source directory not found: $WS/src" >&2
+    exit 1
+fi
+
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+rosdep install --from-paths "$WS/src" --ignore-src -r -y --rosdistro jazzy
+cd "$WS"
+colcon build \
+    --symlink-install \
+    --parallel-workers "${COLCON_JOBS:-4}" \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    "$@"
+
+echo "Built $WS. Open a new attached shell to source its overlay."

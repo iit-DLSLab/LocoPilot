@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+# Only source the base environment here. The overlays are built in dependency
+# order below and sourced after each successful build.
+source /opt/ros/jazzy/setup.bash
+source /opt/deploy_venv/bin/activate
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
+LOCOMANIP_DIR="${LOCOMANIP_DIR:-locomanipulation-teleop-isaaclab}"
+MUSE_DIR="${MUSE_DIR:-muse}"
+UNITREE_DLS_DIR="${UNITREE_DLS_DIR:-unitree-ros2-dls}"
+COLCON_JOBS="${COLCON_JOBS:-4}"
+
+LOCOMANIP_ROOT="${LOCOMANIP_ROOT:-$WORKSPACE_ROOT/$LOCOMANIP_DIR}"
+MUSE_ROOT="${MUSE_ROOT:-$WORKSPACE_ROOT/$MUSE_DIR}"
+UNITREE_DLS_ROOT="${UNITREE_DLS_ROOT:-$WORKSPACE_ROOT/$UNITREE_DLS_DIR}"
+
+UNITREE_SDK_WS="$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws"
+UNITREE_DLS_WS="$UNITREE_DLS_ROOT/ros2_ws"
+MUSE_WS="$MUSE_ROOT/muse_ws"
+CONTROLLER_MSG_WS="$LOCOMANIP_ROOT/deploy/ros2_ws"
+
+for path in \
+    "$LOCOMANIP_ROOT/deploy/run_controller_ros2.py" \
+    "$MUSE_WS/src" \
+    "$UNITREE_DLS_WS/src"; do
+    if [[ ! -e "$path" ]]; then
+        echo "Required path not found: $path" >&2
+        exit 1
+    fi
+done
+
+if [[ ! -d "$UNITREE_SDK_WS/src" ]]; then
+    cat >&2 <<MSG
+Unitree submodule workspace not found:
+  $UNITREE_SDK_WS/src
+
+Initialize the local submodules on the host:
+  git -C $UNITREE_DLS_ROOT submodule update --init --recursive
+MSG
+    exit 1
+fi
+
+if [[ "${1:-}" == "--clean" ]]; then
+    echo "Removing existing Jazzy build artifacts..."
+    rm -rf \
+        "$UNITREE_SDK_WS/build" "$UNITREE_SDK_WS/install" "$UNITREE_SDK_WS/log" \
+        "$UNITREE_DLS_WS/build" "$UNITREE_DLS_WS/install" "$UNITREE_DLS_WS/log" \
+        "$MUSE_WS/build" "$MUSE_WS/install" "$MUSE_WS/log"
+
+    if [[ -L "$CONTROLLER_MSG_WS/install" ]]; then
+        rm -f "$CONTROLLER_MSG_WS/install"
+    fi
+fi
+
+build_ws() {
+    local ws="$1"
+    shift
+    echo
+    echo "================================================================"
+    echo "Building: $ws"
+    echo "================================================================"
+    cd "$ws"
+    colcon build \
+        --symlink-install \
+        --parallel-workers "$COLCON_JOBS" \
+        "$@" \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+}
+
+# 1. Unitree SDK2 messages and CycloneDDS support.
+rosdep install \
+    --from-paths "$UNITREE_SDK_WS/src" \
+    --ignore-src -r -y --rosdistro jazzy
+build_ws "$UNITREE_SDK_WS"
+source "$UNITREE_SDK_WS/install/setup.bash"
+
+# 2. DLS HAL and the canonical dls2_interface package.
+rosdep install \
+    --from-paths "$UNITREE_DLS_WS/src" \
+    --ignore-src -r -y --rosdistro jazzy \
+    --skip-keys "unitree_go unitree_api"
+build_ws "$UNITREE_DLS_WS"
+source "$UNITREE_DLS_WS/install/setup.bash"
+
+# 3. MUSE proprioceptive state estimator. Its local copies of unitree_go and
+# dls2_interface are ignored in favor of the versions sourced above. Point-LIO
+# is intentionally omitted from this deployment image.
+mapfile -t MUSE_PACKAGE_PATHS < <(
+    cd "$MUSE_WS"
+    colcon list \
+        --paths-only \
+        --topological-order \
+        --packages-ignore dls2_interface unitree_go muse_point_lio
+)
+if (( ${#MUSE_PACKAGE_PATHS[@]} == 0 )); then
+    echo "No MUSE packages found after filtering." >&2
+    exit 1
+fi
+(
+    cd "$MUSE_WS"
+    rosdep install \
+        --from-paths "${MUSE_PACKAGE_PATHS[@]}" \
+        --ignore-src -r -y --rosdistro jazzy \
+        --skip-keys "unitree_go dls2_interface"
+)
+build_ws "$MUSE_WS" \
+    --packages-ignore dls2_interface unitree_go muse_point_lio
+source "$MUSE_WS/install/setup.bash"
+
+# run_controller_ros2.py checks for this path before it checks the environment
+# flag. Point it at the canonical DLS interface build rather than compiling a
+# second copy from the deployment repository.
+mkdir -p "$CONTROLLER_MSG_WS"
+if [[ ! -e "$CONTROLLER_MSG_WS/install" ]]; then
+    ln -s "$UNITREE_DLS_WS/install" "$CONTROLLER_MSG_WS/install"
+fi
+
+# 4 build piper repo
+
+PIPER_WS="${ROOT}/piper-ros2-dls/ros2_ws"
+
+if [ -d "${PIPER_WS}/src" ]; then
+    echo "================================================================"
+    echo "Building: ${PIPER_WS}"
+    echo "================================================================"
+
+    cd "${PIPER_WS}"
+
+    rosdep install \
+        --from-paths src \
+        --ignore-src \
+        --rosdistro jazzy \
+        -r -y
+
+    colcon build --symlink-install
+fi
+
+# Optional additional Jazzy workspaces, such as the arm teleoperation workspace.
+if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
+    old_ifs="$IFS"
+    IFS=':' read -r -a extra_workspaces <<< "$EXTRA_ROS_WORKSPACES"
+    IFS="$old_ifs"
+    for ws in "${extra_workspaces[@]}"; do
+        [[ -n "$ws" ]] || continue
+        if [[ ! -d "$ws/src" ]]; then
+            echo "Skipping extra workspace without src/: $ws" >&2
+            continue
+        fi
+        rosdep install \
+            --from-paths "$ws/src" \
+            --ignore-src -r -y --rosdistro jazzy
+        build_ws "$ws"
+        source "$ws/install/setup.bash"
+    done
+fi
+
+echo
+echo "All deployment workspaces built successfully."
+echo "Open a new shell with attach.sh before launching the stack."

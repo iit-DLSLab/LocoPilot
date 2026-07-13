@@ -1,0 +1,13 @@
+unset ROS_LOCALHOST_ONLY
+unset ROS_STATIC_PEERS
+
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+source /opt/ros/jazzy/setup.bash
+source /workspace/locoman_vla_deploy/unitree-ros2-dls/unitree_ros2/cyclonedds_ws/install/setup.bash
+source /workspace/locoman_vla_deploy/unitree-ros2-dls/unitree_ros2_connect.bash
+source /workspace/locoman_vla_deploy/unitree-ros2-dls/ros2_ws/install/setup.bash
+source /workspace/locoman_vla_deploy/muse/muse_ws/install/setup.bash
+

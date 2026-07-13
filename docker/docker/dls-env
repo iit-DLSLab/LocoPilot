@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Source this file; do not execute it in a subshell when you need the resulting
+# ROS environment in your current shell.
+
+_dls_source_if_present() {
+    local setup_file="$1"
+    if [[ -f "$setup_file" ]]; then
+        # shellcheck disable=SC1090
+        source "$setup_file"
+    fi
+}
+
+export WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
+export LOCOMANIP_DIR="${LOCOMANIP_DIR:-locomanipulation-teleop-isaaclab}"
+export MUSE_DIR="${MUSE_DIR:-muse}"
+export UNITREE_DLS_DIR="${UNITREE_DLS_DIR:-unitree-ros2-dls}"
+
+export LOCOMANIP_ROOT="${LOCOMANIP_ROOT:-$WORKSPACE_ROOT/$LOCOMANIP_DIR}"
+export MUSE_ROOT="${MUSE_ROOT:-$WORKSPACE_ROOT/$MUSE_DIR}"
+export UNITREE_DLS_ROOT="${UNITREE_DLS_ROOT:-$WORKSPACE_ROOT/$UNITREE_DLS_DIR}"
+
+_dls_source_if_present /opt/ros/jazzy/setup.bash
+_dls_source_if_present /opt/deploy_venv/bin/activate
+_dls_source_if_present "$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws/install/setup.bash"
+_dls_source_if_present "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash"
+_dls_source_if_present "$MUSE_ROOT/muse_ws/install/setup.bash"
+
+if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
+    _dls_old_ifs="$IFS"
+    IFS=':' read -r -a _dls_extra_workspaces <<< "$EXTRA_ROS_WORKSPACES"
+    IFS="$_dls_old_ifs"
+    for _dls_ws in "${_dls_extra_workspaces[@]}"; do
+        [[ -n "$_dls_ws" ]] || continue
+        _dls_source_if_present "$_dls_ws/install/setup.bash"
+    done
+    unset _dls_ws _dls_extra_workspaces _dls_old_ifs
+fi
+
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+export ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}"
+export LOCOMANIPULATION_TELEOP_ROS2_SOURCED=1
+export MUJOCO_GL="${MUJOCO_GL:-glfw}"
+
+if [[ -z "${CYCLONEDDS_URI:-}" && -n "${ROBOT_NET_IFACE:-}" ]]; then
+    export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"${ROBOT_NET_IFACE}\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
+fi
+
+unset -f _dls_source_if_present

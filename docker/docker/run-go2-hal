@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -eo pipefail
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+
+HAL_BIN="$UNITREE_DLS_ROOT/ros2_ws/install/go2_hal/bin/go2_hal"
+if [[ ! -x "$HAL_BIN" ]]; then
+    echo "GO2 HAL binary not found: $HAL_BIN" >&2
+    echo "Run build-workspaces.sh first." >&2
+    exit 1
+fi
+if [[ -z "${ROBOT_NET_IFACE:-}" && -z "${CYCLONEDDS_URI:-}" ]]; then
+    echo "ROBOT_NET_IFACE or CYCLONEDDS_URI must be configured." >&2
+    exit 1
+fi
+
+exec "$HAL_BIN" "$@"

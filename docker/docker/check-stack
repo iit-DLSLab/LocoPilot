@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -eo pipefail
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+
+status=0
+check_path() {
+    local label="$1"
+    local path="$2"
+    if [[ -e "$path" ]]; then
+        printf '[OK]   %-28s %s\n' "$label" "$path"
+    else
+        printf '[MISS] %-28s %s\n' "$label" "$path"
+        status=1
+    fi
+}
+
+check_path "locomanipulation repo" "$LOCOMANIP_ROOT/deploy/run_controller_ros2.py"
+check_path "Unitree SDK install" "$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws/install/setup.bash"
+check_path "DLS HAL install" "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash"
+check_path "GO2 HAL executable" "$UNITREE_DLS_ROOT/ros2_ws/install/go2_hal/bin/go2_hal"
+check_path "MUSE install" "$MUSE_ROOT/muse_ws/install/setup.bash"
+
+printf '\nEnvironment:\n'
+printf '  RMW_IMPLEMENTATION=%s\n' "${RMW_IMPLEMENTATION:-}"
+printf '  ROS_DOMAIN_ID=%s\n' "${ROS_DOMAIN_ID:-}"
+printf '  ROBOT_NET_IFACE=%s\n' "${ROBOT_NET_IFACE:-}"
+printf '  CYCLONEDDS_URI=%s\n' "${CYCLONEDDS_URI:-}"
+
+printf '\nPython imports:\n'
+python - <<'PY' || status=1
+import importlib
+mods = ["numpy", "scipy", "onnxruntime", "torch", "mujoco", "mink", "rclpy"]
+for name in mods:
+    importlib.import_module(name)
+    print(f"  [OK] {name}")
+PY
+
+if [[ -f "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash" ]]; then
+    printf '\nROS packages:\n'
+    for pkg in rmw_cyclonedds_cpp dls2_interface go2_hal state_estimator; do
+        if ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
+            printf '  [OK] %s -> %s\n' "$pkg" "$(ros2 pkg prefix "$pkg")"
+        else
+            printf '  [MISS] %s\n' "$pkg"
+            status=1
+        fi
+    done
+fi
+
+if [[ "${1:-}" == "--topics" ]]; then
+    printf '\nVisible ROS topics:\n'
+    ros2 topic list | sort
+fi
+
+exit "$status"

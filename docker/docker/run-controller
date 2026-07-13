@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -eo pipefail
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+
+SCRIPT="$LOCOMANIP_ROOT/deploy/run_controller_ros2.py"
+CONTROLLER_MSG_WS="$LOCOMANIP_ROOT/deploy/ros2_ws"
+CANONICAL_INSTALL="$UNITREE_DLS_ROOT/ros2_ws/install"
+
+if [[ ! -f "$SCRIPT" ]]; then
+    echo "Controller script not found: $SCRIPT" >&2
+    exit 1
+fi
+if [[ ! -f "$CANONICAL_INSTALL/setup.bash" ]]; then
+    echo "Canonical DLS ROS workspace has not been built." >&2
+    echo "Run build-workspaces.sh first." >&2
+    exit 1
+fi
+
+mkdir -p "$CONTROLLER_MSG_WS"
+if [[ ! -e "$CONTROLLER_MSG_WS/install" ]]; then
+    ln -s "$CANONICAL_INSTALL" "$CONTROLLER_MSG_WS/install"
+fi
+
+cd "$LOCOMANIP_ROOT"
+export LOCOMANIPULATION_TELEOP_ROS2_SOURCED=1
+
+priority="${CONTROLLER_RT_PRIORITY:-0}"
+if [[ "$priority" =~ ^[0-9]+$ ]] && (( priority > 0 )); then
+    exec chrt -r "$priority" python "$SCRIPT" "$@"
+fi
+exec python "$SCRIPT" "$@"

@@ -1,0 +1,16 @@
+# Local Docker configuration
+docker/.env
+
+# Exported Docker images
+*.tar
+*.tar.gz
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Python
+__pycache__/
+*.pyc

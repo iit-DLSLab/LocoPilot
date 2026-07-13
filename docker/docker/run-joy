@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -eo pipefail
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+exec ros2 launch teleop_twist_joy teleop-launch.py \
+    joy_config:="${JOY_CONFIG:-xbox}" "$@"

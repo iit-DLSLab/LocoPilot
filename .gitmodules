@@ -10,3 +10,6 @@
 	path = unitree-ros2-dls
 	url = git@github.com:Giovadess/unitree-ros2-dls.git
 	branch = jazzy-deploy
+[submodule "piper-ros2-dls"]
+	path = piper-ros2-dls
+	url = https://github.com/iit-DLSLab/piper-ros2-dls

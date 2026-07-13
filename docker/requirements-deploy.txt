@@ -1,0 +1,12 @@
+# Deployment-only Python dependencies from the provided ROS 2 environment.
+# ROS itself is supplied by osrf/ros:jazzy-desktop and Ubuntu packages.
+numpy<2
+scipy
+tqdm
+gymnasium
+onnxruntime
+PyYAML
+readchar
+loop-rate-limiters
+mujoco>=3.3.6,<4
+mink>=1.1,<2

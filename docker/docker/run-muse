@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -eo pipefail
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+exec ros2 launch state_estimator state_estimator.launch.py "$@"
