@@ -13,3 +13,6 @@
 [submodule "piper-ros2-dls"]
 	path = piper-ros2-dls
 	url = https://github.com/iit-DLSLab/piper-ros2-dls
+[submodule "dls_ros2_manipulation"]
+	path = dls_ros2_manipulation
+	url = git@github.com:iit-DLSLab/dls_ros2_manipulation.git

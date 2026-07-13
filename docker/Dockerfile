@@ -79,6 +79,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-typing-extensions \
     ros-jazzy-joint-state-publisher-gui \
     ros-jazzy-moveit \
+    ros-jazzy-moveit-msgs \
     ros-jazzy-ros2-control \
     ros-jazzy-ros2-controllers \
     ros-jazzy-topic-tools \
