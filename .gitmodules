@@ -1,0 +1,12 @@
+[submodule "locomanipulation-teleop-isaaclab"]
+	path = locomanipulation-teleop-isaaclab
+	url = git@github.com:Giovadess/locomanipulation-teleop-isaaclab.git
+	branch = jazzy-deploy
+[submodule "muse"]
+	path = muse
+	url = git@github.com:Giovadess/muse.git
+	branch = jazzy-deploy
+[submodule "unitree-ros2-dls"]
+	path = unitree-ros2-dls
+	url = git@github.com:Giovadess/unitree-ros2-dls.git
+	branch = jazzy-deploy
