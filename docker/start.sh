@@ -22,6 +22,7 @@ CONTAINER_WORKSPACE="${CONTAINER_WORKSPACE:-/workspace/locoman_vla_deploy}"
 LOCOMANIP_DIR="${LOCOMANIP_DIR:-locomanipulation-teleop-isaaclab}"
 MUSE_DIR="${MUSE_DIR:-muse}"
 UNITREE_DLS_DIR="${UNITREE_DLS_DIR:-unitree-ros2-dls}"
+PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 COLCON_JOBS="${COLCON_JOBS:-4}"
 ENABLE_X11="${ENABLE_X11:-1}"
@@ -31,7 +32,8 @@ EXTRA_ROS_WORKSPACES="${EXTRA_ROS_WORKSPACES:-}"
 for path in \
     "$HOST_WORKSPACE/$LOCOMANIP_DIR" \
     "$HOST_WORKSPACE/$MUSE_DIR" \
-    "$HOST_WORKSPACE/$UNITREE_DLS_DIR"; do
+    "$HOST_WORKSPACE/$UNITREE_DLS_DIR" \
+    "$HOST_WORKSPACE/$PIPER_DIR"; do
     if [[ ! -d "$path" ]]; then
         echo "Required repository directory not found: $path" >&2
         exit 1
@@ -79,9 +81,10 @@ args=(
     -e "LOCOMANIP_DIR=$LOCOMANIP_DIR"
     -e "MUSE_DIR=$MUSE_DIR"
     -e "UNITREE_DLS_DIR=$UNITREE_DLS_DIR"
+    -e "PIPER_DIR=$PIPER_DIR"
     -e "ROBOT_NET_IFACE=$ROBOT_NET_IFACE"
     -e "ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
-    -e "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
+    -e "RMW_IMPLEMENTATION=rmw_fastrtps_cpp"
     -e "ROS_LOCALHOST_ONLY=0"
     -e "COLCON_JOBS=$COLCON_JOBS"
     -e "EXTRA_ROS_WORKSPACES=$EXTRA_ROS_WORKSPACES"

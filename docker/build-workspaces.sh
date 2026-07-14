@@ -11,4 +11,11 @@ fi
 
 CONTAINER_NAME="${CONTAINER_NAME:-locoman_vla_jazzy}"
 
-exec docker exec -it "$CONTAINER_NAME" build-dls-workspaces "$@"
+# -t requires a real terminal; drop it when stdin isn't one (e.g. CI, scripts,
+# `docker exec -it` otherwise fails outright with "the input device is not a TTY").
+docker_exec_flags=(-i)
+if [[ -t 0 ]]; then
+    docker_exec_flags+=(-t)
+fi
+
+exec docker exec "${docker_exec_flags[@]}" "$CONTAINER_NAME" build-dls-workspaces "$@"

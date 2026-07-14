@@ -9,7 +9,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
+    RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
     ROS_DOMAIN_ID=0 \
     ROS_LOCALHOST_ONLY=0 \
     PIP_NO_CACHE_DIR=1 \
@@ -57,7 +57,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     psmisc \
     tmux \
     vim-tiny \
-    ros-jazzy-rmw-cyclonedds-cpp \
+    ros-jazzy-rmw-fastrtps-cpp \
     ros-jazzy-rosidl-generator-dds-idl \
     ros-jazzy-message-filters \
     ros-jazzy-robot-state-publisher \
@@ -91,8 +91,9 @@ RUN rosdep init 2>/dev/null || true \
     && rosdep update --rosdistro jazzy
 
 COPY requirements-deploy.txt /tmp/requirements-deploy.txt
+# Do NOT upgrade setuptools here
 RUN python3 -m venv --system-site-packages /opt/deploy_venv \
-    && /opt/deploy_venv/bin/python -m pip install --upgrade pip setuptools wheel \
+    && /opt/deploy_venv/bin/python -m pip install --upgrade pip wheel \
     && /opt/deploy_venv/bin/python -m pip install \
         --index-url "${TORCH_INDEX_URL}" torch \
     && /opt/deploy_venv/bin/python -m pip install \
@@ -103,6 +104,7 @@ COPY docker/entrypoint.sh /usr/local/bin/dls-entrypoint
 COPY docker/build-dls-workspaces /usr/local/bin/build-dls-workspaces
 COPY docker/build-extra-workspace /usr/local/bin/build-extra-workspace
 COPY docker/run-go2-hal /usr/local/bin/run-go2-hal
+COPY docker/run-piper-hal /usr/local/bin/run-piper-hal
 COPY docker/run-muse /usr/local/bin/run-muse
 COPY docker/run-controller /usr/local/bin/run-controller
 COPY docker/run-joy /usr/local/bin/run-joy
@@ -114,6 +116,7 @@ RUN chmod +x \
     /usr/local/bin/build-dls-workspaces \
     /usr/local/bin/build-extra-workspace \
     /usr/local/bin/run-go2-hal \
+    /usr/local/bin/run-piper-hal \
     /usr/local/bin/run-muse \
     /usr/local/bin/run-controller \
     /usr/local/bin/run-joy \

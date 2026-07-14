@@ -10,15 +10,18 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
 LOCOMANIP_DIR="${LOCOMANIP_DIR:-locomanipulation-teleop-isaaclab}"
 MUSE_DIR="${MUSE_DIR:-muse}"
 UNITREE_DLS_DIR="${UNITREE_DLS_DIR:-unitree-ros2-dls}"
+PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
 COLCON_JOBS="${COLCON_JOBS:-4}"
 
 LOCOMANIP_ROOT="${LOCOMANIP_ROOT:-$WORKSPACE_ROOT/$LOCOMANIP_DIR}"
 MUSE_ROOT="${MUSE_ROOT:-$WORKSPACE_ROOT/$MUSE_DIR}"
 UNITREE_DLS_ROOT="${UNITREE_DLS_ROOT:-$WORKSPACE_ROOT/$UNITREE_DLS_DIR}"
+PIPER_ROOT="${PIPER_ROOT:-$WORKSPACE_ROOT/$PIPER_DIR}"
 
 UNITREE_SDK_WS="$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws"
 UNITREE_DLS_WS="$UNITREE_DLS_ROOT/ros2_ws"
 MUSE_WS="$MUSE_ROOT/muse_ws"
+PIPER_WS="$PIPER_ROOT/ros2_ws"
 CONTROLLER_MSG_WS="$LOCOMANIP_ROOT/deploy/ros2_ws"
 
 for path in \
@@ -47,7 +50,8 @@ if [[ "${1:-}" == "--clean" ]]; then
     rm -rf \
         "$UNITREE_SDK_WS/build" "$UNITREE_SDK_WS/install" "$UNITREE_SDK_WS/log" \
         "$UNITREE_DLS_WS/build" "$UNITREE_DLS_WS/install" "$UNITREE_DLS_WS/log" \
-        "$MUSE_WS/build" "$MUSE_WS/install" "$MUSE_WS/log"
+        "$MUSE_WS/build" "$MUSE_WS/install" "$MUSE_WS/log" \
+        "$PIPER_WS/build" "$PIPER_WS/install" "$PIPER_WS/log"
 
     if [[ -L "$CONTROLLER_MSG_WS/install" ]]; then
         rm -f "$CONTROLLER_MSG_WS/install"
@@ -62,7 +66,7 @@ build_ws() {
     echo "Building: $ws"
     echo "================================================================"
     cd "$ws"
-    colcon build \
+    python3 -m colcon build \
         --symlink-install \
         --parallel-workers "$COLCON_JOBS" \
         "$@" \
@@ -117,24 +121,38 @@ if [[ ! -e "$CONTROLLER_MSG_WS/install" ]]; then
     ln -s "$UNITREE_DLS_WS/install" "$CONTROLLER_MSG_WS/install"
 fi
 
-# 4 build piper repo
-
-PIPER_WS="${ROOT}/piper-ros2-dls/ros2_ws"
-
-if [ -d "${PIPER_WS}/src" ]; then
-    echo "================================================================"
-    echo "Building: ${PIPER_WS}"
-    echo "================================================================"
-
-    cd "${PIPER_WS}"
-
-    rosdep install \
-        --from-paths src \
-        --ignore-src \
-        --rosdistro jazzy \
-        -r -y
-
-    colcon build --symlink-install
+# 4. AgileX Piper arm workspace. Its bundled dls2_interface copy is a stale
+# stub (missing BaseState/BlindState/etc.) kept only so the package.xml
+# dependency resolves in isolation; it must never be built or sourced, or it
+# will shadow the canonical dls2_interface installed in step 2 and reproduce
+# the exact type-hash/message-loss failures documented under "Common issues".
+if [[ -d "$PIPER_WS/src" ]]; then
+    (
+        cd "$PIPER_WS"
+        # moveit_ros_perception and warehouse_ros_mongo are exec_depends of
+        # agx_arm_moveit, needed only for the optional "ROS 2 HAL + MoveIt"
+        # control path documented in piper-ros2-dls/README.md. This image
+        # uses the DLS2 HAL path (run-piper-hal / piper_hal.py) instead, and
+        # at least moveit_ros_perception has no ros-jazzy apt package yet.
+        rosdep install \
+            --from-paths src \
+            --ignore-src -r -y --rosdistro jazzy \
+            --skip-keys "dls2_interface moveit_ros_perception warehouse_ros_mongo"
+    )
+    # piper_sdk's setup.py points package_dir outside the package tree (at the
+    # pyAgxArm submodule via a relative "../../../pyAgxArm"), which breaks
+    # ament_python's --symlink-install path resolution ("Can't get a
+    # consistent path to setup script from installation directory"). Build it
+    # as a plain (non-symlink) install first, then symlink-install the rest.
+    (
+        cd "$PIPER_WS"
+        python3 -m colcon build --packages-select piper_sdk \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+    )
+    build_ws "$PIPER_WS" --packages-ignore dls2_interface --packages-skip piper_sdk
+    source "$PIPER_WS/install/setup.bash"
+else
+    echo "Piper workspace not found, skipping: $PIPER_WS/src" >&2
 fi
 
 # Optional additional Jazzy workspaces, such as the arm teleoperation workspace.

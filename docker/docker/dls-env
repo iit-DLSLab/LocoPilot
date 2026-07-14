@@ -14,16 +14,19 @@ export WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
 export LOCOMANIP_DIR="${LOCOMANIP_DIR:-locomanipulation-teleop-isaaclab}"
 export MUSE_DIR="${MUSE_DIR:-muse}"
 export UNITREE_DLS_DIR="${UNITREE_DLS_DIR:-unitree-ros2-dls}"
+export PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
 
 export LOCOMANIP_ROOT="${LOCOMANIP_ROOT:-$WORKSPACE_ROOT/$LOCOMANIP_DIR}"
 export MUSE_ROOT="${MUSE_ROOT:-$WORKSPACE_ROOT/$MUSE_DIR}"
 export UNITREE_DLS_ROOT="${UNITREE_DLS_ROOT:-$WORKSPACE_ROOT/$UNITREE_DLS_DIR}"
+export PIPER_ROOT="${PIPER_ROOT:-$WORKSPACE_ROOT/$PIPER_DIR}"
 
 _dls_source_if_present /opt/ros/jazzy/setup.bash
 _dls_source_if_present /opt/deploy_venv/bin/activate
 _dls_source_if_present "$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws/install/setup.bash"
 _dls_source_if_present "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash"
 _dls_source_if_present "$MUSE_ROOT/muse_ws/install/setup.bash"
+_dls_source_if_present "$PIPER_ROOT/ros2_ws/install/setup.bash"
 
 if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
     _dls_old_ifs="$IFS"
@@ -36,14 +39,48 @@ if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
     unset _dls_ws _dls_extra_workspaces _dls_old_ifs
 fi
 
-export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 export ROS_LOCALHOST_ONLY="${ROS_LOCALHOST_ONLY:-0}"
 export LOCOMANIPULATION_TELEOP_ROS2_SOURCED=1
 export MUJOCO_GL="${MUJOCO_GL:-glfw}"
 
-if [[ -z "${CYCLONEDDS_URI:-}" && -n "${ROBOT_NET_IFACE:-}" ]]; then
-    export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"${ROBOT_NET_IFACE}\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
+# Fast DDS pins its interface by IP address, not interface name (unlike
+# CycloneDDS's <NetworkInterface name=...>), via an interfaceWhiteList in an
+# XML profiles file referenced by FASTRTPS_DEFAULT_PROFILES_FILE.
+if [[ -z "${FASTRTPS_DEFAULT_PROFILES_FILE:-}" && -n "${ROBOT_NET_IFACE:-}" ]]; then
+    _dls_iface_ip="$(ip -4 -o addr show "$ROBOT_NET_IFACE" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n1)"
+    if [[ -n "$_dls_iface_ip" ]]; then
+        _dls_fastdds_profile_file="$(mktemp --suffix=.xml)"
+        cat > "$_dls_fastdds_profile_file" <<EOF
+<?xml version="1.0" encoding="UTF-8" ?>
+<dds xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <profiles>
+    <transport_descriptors>
+      <transport_descriptor>
+        <transport_id>dls_udp_transport</transport_id>
+        <type>UDPv4</type>
+        <interfaceWhiteList>
+          <address>${_dls_iface_ip}</address>
+        </interfaceWhiteList>
+      </transport_descriptor>
+    </transport_descriptors>
+    <participant profile_name="dls_participant_profile" is_default_profile="true">
+      <rtps>
+        <useBuiltinTransports>false</useBuiltinTransports>
+        <userTransports>
+          <transport_id>dls_udp_transport</transport_id>
+        </userTransports>
+      </rtps>
+    </participant>
+  </profiles>
+</dds>
+EOF
+        export FASTRTPS_DEFAULT_PROFILES_FILE="$_dls_fastdds_profile_file"
+    else
+        echo "Warning: could not resolve an IPv4 address for ROBOT_NET_IFACE=$ROBOT_NET_IFACE; Fast DDS will not be pinned to it." >&2
+    fi
+    unset _dls_iface_ip _dls_fastdds_profile_file
 fi
 
 unset -f _dls_source_if_present
