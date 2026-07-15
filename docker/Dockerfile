@@ -127,7 +127,7 @@ RUN chmod +x \
     /usr/local/bin/can-activate \
     /usr/local/bin/teleop-session \
     && printf '\n# DLS Jazzy deployment environment\nsource /usr/local/bin/dls-env\n' >> /root/.bashrc \
-    && printf 'set -g mouse on\n' >> /root/.tmux.conf
+    && printf 'set -g mouse on\nset -g set-clipboard on\n' >> /root/.tmux.conf
 
 WORKDIR /workspace/locoman_vla_deploy
 ENTRYPOINT ["/usr/local/bin/dls-entrypoint"]
