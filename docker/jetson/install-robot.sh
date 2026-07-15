@@ -112,9 +112,20 @@ echo "==> [5/5] build the jetson image, start the container, build workspaces"
 ssh "$REMOTE" \
     ROBOT_WORKSPACE="$ROBOT_WORKSPACE" \
     CONTAINER_NAME="$CONTAINER_NAME" \
+    IMAGE_NAME="$IMAGE_NAME" \
     'bash -s' <<'REMOTE_BUILD'
 set -euo pipefail
 "$ROBOT_WORKSPACE/docker/jetson/build-image.sh"
+# Recreate the container when it predates the freshly built image (or when
+# .env changes were copied above), so reruns actually apply image updates.
+if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+    container_image="$(docker inspect -f '{{.Image}}' "$CONTAINER_NAME")"
+    image_id="$(docker image inspect -f '{{.Id}}' "$IMAGE_NAME")"
+    if [[ "$container_image" != "$image_id" ]]; then
+        echo "Recreating container $CONTAINER_NAME (image changed)"
+        docker rm -f "$CONTAINER_NAME" >/dev/null
+    fi
+fi
 "$ROBOT_WORKSPACE/docker/jetson/start.sh"
 docker exec "$CONTAINER_NAME" build-jetson-workspaces
 REMOTE_BUILD

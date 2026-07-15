@@ -56,6 +56,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rmw-fastrtps-cpp \
     ros-jazzy-robot-state-publisher \
     ros-jazzy-joint-state-publisher \
+    ros-jazzy-joint-state-publisher-gui \
+    # rviz2 is required even headless: agx_arm_description's display.launch.py
+    # (included by start_single_agx_arm_rviz.launch.py) declares an rviz2 node
+    # unconditionally, and launch aborts if the package is missing. Without a
+    # DISPLAY the rviz2 process exits; the arm nodes keep running.
+    ros-jazzy-rviz2 \
     ros-jazzy-xacro \
     ros-jazzy-moveit-msgs \
     ros-jazzy-topic-tools \
