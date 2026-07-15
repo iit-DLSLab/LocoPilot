@@ -17,10 +17,14 @@ if [[ -f "$SCRIPT_DIR/.env" ]]; then
 fi
 
 CONTAINER_NAME="${CONTAINER_NAME:-locoman_vla_jazzy}"
+CONTAINER_WORKSPACE="${CONTAINER_WORKSPACE:-/workspace/locoman_vla_deploy}"
 
 "$SCRIPT_DIR/start.sh"
 
+# Run the helper scripts from the mounted repo, not the copies baked into the
+# image, so fixes apply without an image rebuild.
 echo "Activating CAN interface..."
-docker exec "$CONTAINER_NAME" can-activate
+docker exec "$CONTAINER_NAME" bash "$CONTAINER_WORKSPACE/docker/docker/can-activate"
 
-exec docker exec -it "$CONTAINER_NAME" teleop-session leader
+exec docker exec -it "$CONTAINER_NAME" \
+    bash "$CONTAINER_WORKSPACE/docker/docker/teleop-session" leader

@@ -341,7 +341,7 @@ Leader–follower teleoperation runs on two machines, each with its own image:
 
 | Side | Machine | Image | Processes |
 |---|---|---|---|
-| **Leader** | Laptop (leader arm's CAN adapter attached) | `locoman-vla-jazzy` (the **laptop image**, this repo's default) | leader arm controller, PD+gravity controller, `p2p_teleoperation` |
+| **Leader** | Laptop (leader arm's CAN adapter attached) | `locoman-vla-jazzy` (the **laptop image**, this repo's default) | leader arm controller, PD+gravity controller, `p2p_teleoperation`, joy joint controller |
 | **Follower** | Unitree Go2 Jetson (`unitree@192.168.123.18`) | `locoman-vla-jetson` (the **jetson image**, `docker/jetson/`) | follower arm controller, PD+gravity controller, two RealSense cameras |
 
 **Robot installation** (one-time, run from the laptop; prerequisites on the Jetson: Docker + NVIDIA container toolkit + [jetson-containers](https://github.com/dusty-nv/jetson-containers) installed, internet through the router):
@@ -352,7 +352,7 @@ cp jetson.env.example .env    # TODO: set the RealSense camera serial numbers he
 ./install-robot.sh            # ssh key setup → clone repo → base + jetson image → workspaces
 ```
 
-**Deploy** (each command activates CAN and attaches to a tmux session with one window per launch — detach with `C-b d`, switch windows with `C-b 1/2/3`, kill everything with `C-b : kill-session`):
+**Deploy** (each command activates CAN and attaches to a tmux session with one window per launch — detach with `C-b d`, switch windows with `C-b <number>` or the mouse, kill everything with `C-b : kill-session`):
 
 ```bash
 docker/jetson/deploy-robot.sh   # follower stack on the Jetson (handles ssh)

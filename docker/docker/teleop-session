@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Usage: teleop-session <leader|robot>
 #
-#   leader → arm-ctrl (namespace:=leader) + pd-g + p2p-teleop
+#   leader → arm-ctrl (namespace:=leader) + pd-g + p2p-teleop + joy-joint
 #   robot  → arm-ctrl (namespace:=follower) + pd-g + cameras
 #
 # Each window sources dls-env before launching, exactly like an attach.sh
@@ -64,6 +64,8 @@ tmux new-window -t "$SESSION" -n pd-g \
 if [[ "$ROLE" == "leader" ]]; then
     tmux new-window -t "$SESSION" -n p2p-teleop \
         bash -c "$(window_cmd "sleep 5 && ros2 launch haptic_teleoperation p2p_teleoperation.launch.py")"
+    tmux new-window -t "$SESSION" -n joy-joint \
+        bash -c "$(window_cmd "sleep 5 && ros2 launch haptic_teleoperation joy_joint_controller.launch.py")"
 else
     # TODO: set the RealSense serial numbers for this robot's cameras in
     # docker/jetson/.env (GRIPPER_CAMERA_SERIAL / WORLD_CAMERA_SERIAL). Find

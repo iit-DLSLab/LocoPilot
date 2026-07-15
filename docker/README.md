@@ -161,7 +161,7 @@ cd jetson && cp jetson.env.example .env   # TODO: set RealSense camera serials
 
 # Deploy (each attaches to a tmux session, one window per launch; C-b d detaches):
 jetson/deploy-robot.sh   # follower: arm ctrl + PD+g + two RealSense cameras (over ssh)
-./deploy-leader.sh       # leader:   arm ctrl + PD+g + p2p_teleoperation
+./deploy-leader.sh       # leader:   arm ctrl + PD+g + p2p_teleoperation + joy joint ctrl
 ```
 
 Details:
