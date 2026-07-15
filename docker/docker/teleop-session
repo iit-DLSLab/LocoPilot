@@ -67,16 +67,10 @@ if [[ "$ROLE" == "leader" ]]; then
     tmux new-window -t "$SESSION" -n joy-joint \
         bash -c "$(window_cmd "sleep 5 && ros2 launch haptic_teleoperation joy_joint_controller.launch.py")"
 else
-    # TODO: set the RealSense serial numbers for this robot's cameras in
-    # docker/jetson/.env (GRIPPER_CAMERA_SERIAL / WORLD_CAMERA_SERIAL). Find
-    # them with: rs-enumerate-devices -s
-    CAMERAS_CMD="ros2 launch manipulation_demo_recorder two_realsense_cameras.launch.py"
-    if [[ -n "${GRIPPER_CAMERA_SERIAL:-}" ]]; then
-        CAMERAS_CMD+=" gripper_camera_serial_no:=$GRIPPER_CAMERA_SERIAL"
-    fi
-    if [[ -n "${WORLD_CAMERA_SERIAL:-}" ]]; then
-        CAMERAS_CMD+=" world_camera_serial_no:=$WORLD_CAMERA_SERIAL"
-    fi
+    # The launch file reads GRIPPER_CAMERA_SERIAL / WORLD_CAMERA_SERIAL (and
+    # optional WORLD_CAMERA_WIDTH / WORLD_CAMERA_HEIGHT) from the environment,
+    # set in docker/jetson/.env. Find serials with: rs-enumerate-devices -s
+    CAMERAS_CMD="ros2 launch $WORKSPACE_ROOT/launch/two_realsense_cameras.launch.py"
     tmux new-window -t "$SESSION" -n cameras \
         bash -c "$(window_cmd "$CAMERAS_CMD")"
 fi

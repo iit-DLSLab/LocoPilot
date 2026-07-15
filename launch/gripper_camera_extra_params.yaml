@@ -1,0 +1,8 @@
+# Extra parameters for the gripper camera (D435), passed to
+# realsense2_camera via config_file1 in two_realsense_cameras.launch.py.
+# rs_multi_camera_launch.py has no per-camera launch arguments for these,
+# so they live here. Values match the old manipulation_demo_recorder
+# launch defaults.
+rgb_camera.enable_auto_white_balance: false
+rgb_camera.white_balance: 3200.0
+rgb_camera.exposure: 250
