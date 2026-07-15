@@ -141,17 +141,24 @@ if [[ -d "$PIPER_WS/src" ]]; then
             --ignore-src -r -y --rosdistro jazzy \
             --skip-keys "dls2_interface moveit_ros_perception warehouse_ros_mongo"
     )
-    # piper_sdk's setup.py points package_dir outside the package tree (at the
-    # pyAgxArm submodule via a relative "../../../pyAgxArm"), which breaks
-    # ament_python's --symlink-install path resolution ("Can't get a
-    # consistent path to setup script from installation directory"). Build it
-    # as a plain (non-symlink) install first, then symlink-install the rest.
+    # Two package groups here cannot use --symlink-install:
+    #   - piper_sdk: its setup.py points package_dir outside the package tree
+    #     (at the pyAgxArm submodule via a relative "../../../pyAgxArm"),
+    #     breaking ament_python's symlink path resolution ("Can't get a
+    #     consistent path to setup script from installation directory").
+    #   - agx_arm_pd_g_controller: generate_parameter_library_py generates its
+    #     *_parameters.py module while setup.py runs, after the symlink farm
+    #     was created, so a symlink install misses the module and the node
+    #     dies at import time (ModuleNotFoundError: ..._parameters).
+    # Build both as plain (non-symlink) installs first, then symlink-install
+    # the rest.
     (
         cd "$PIPER_WS"
-        python3 -m colcon build --packages-select piper_sdk \
+        python3 -m colcon build --packages-select piper_sdk agx_arm_pd_g_controller \
             --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
     )
-    build_ws "$PIPER_WS" --packages-ignore dls2_interface --packages-skip piper_sdk
+    build_ws "$PIPER_WS" --packages-ignore dls2_interface \
+        --packages-skip piper_sdk agx_arm_pd_g_controller
     source "$PIPER_WS/install/setup.bash"
 else
     echo "Piper workspace not found, skipping: $PIPER_WS/src" >&2
@@ -161,15 +168,18 @@ fi
 # The dls_ros2_manipulation submodule has no ros2_ws of its own; its packages
 # are discovered through the committed symlink ros2_ws/src/dls_ros2_manipulation
 # so colcon artifacts land in the top-level ros2_ws instead of dirtying the
-# submodule working tree.
+# submodule working tree. Both packages use generate_parameter_library_py, so
+# they get a plain (non-symlink) build — see the agx_arm_pd_g_controller note.
 if [[ -d "$MANIP_WS/src/dls_ros2_manipulation" ]]; then
     (
         cd "$MANIP_WS"
         rosdep install \
             --from-paths src \
             --ignore-src -r -y --rosdistro jazzy
+        python3 -m colcon build \
+            --parallel-workers "$COLCON_JOBS" \
+            --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
     )
-    build_ws "$MANIP_WS"
     source "$MANIP_WS/install/setup.bash"
 else
     echo "Manipulation workspace not found, skipping: $MANIP_WS/src/dls_ros2_manipulation" >&2

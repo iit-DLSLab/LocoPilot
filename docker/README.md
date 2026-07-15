@@ -97,7 +97,7 @@ controller --/trajectory_generator, /arm_trajectory_generator-->  simulator
 
 ## 6. Physical robot deployment
 
-`attach.sh` already sets `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, unsets `ROS_LOCALHOST_ONLY`, and pins Fast DDS's transport to `ROBOT_NET_IFACE`'s IP address via a generated `FASTRTPS_DEFAULT_PROFILES_FILE` (Fast DDS whitelists by IP, not interface name, unlike CycloneDDS). This matches the Go2's own native DDS stack — CycloneDDS is no longer used anywhere in this deployment. One attached terminal per process; keep the robot supported for the first test.
+`attach.sh` already sets `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, sets `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET` (Jazzy's replacement for `ROS_LOCALHOST_ONLY`, which is unset), and pins Fast DDS's transport to `ROBOT_NET_IFACE`'s IP address via a generated `FASTRTPS_DEFAULT_PROFILES_FILE` (Fast DDS whitelists by IP, not interface name, unlike CycloneDDS). This matches the Go2's own native DDS stack — CycloneDDS is no longer used anywhere in this deployment. One attached terminal per process; keep the robot supported for the first test.
 
 **Terminal 1 — Go2 HAL**
 ```bash

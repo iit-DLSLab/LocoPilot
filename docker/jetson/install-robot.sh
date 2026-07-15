@@ -113,6 +113,7 @@ ssh "$REMOTE" \
     ROBOT_WORKSPACE="$ROBOT_WORKSPACE" \
     CONTAINER_NAME="$CONTAINER_NAME" \
     IMAGE_NAME="$IMAGE_NAME" \
+    CONTAINER_WORKSPACE="${CONTAINER_WORKSPACE:-/workspace/locoman_vla_deploy}" \
     'bash -s' <<'REMOTE_BUILD'
 set -euo pipefail
 "$ROBOT_WORKSPACE/docker/jetson/build-image.sh"
@@ -127,7 +128,10 @@ if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
     fi
 fi
 "$ROBOT_WORKSPACE/docker/jetson/start.sh"
-docker exec "$CONTAINER_NAME" build-jetson-workspaces
+# From the mounted repo, not the baked copy, so script fixes apply on rerun
+# without an image rebuild.
+docker exec "$CONTAINER_NAME" \
+    bash "$CONTAINER_WORKSPACE/docker/jetson/docker/build-jetson-workspaces"
 REMOTE_BUILD
 
 echo

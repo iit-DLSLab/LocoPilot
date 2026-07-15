@@ -88,13 +88,14 @@ Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/ID
 
 All physical-robot terminals must use Fast DDS (`rmw_fastrtps_cpp`) on the robot-facing interface — this matches the Go2's own native DDS stack (see §9).
 
-Inside the container this is already configured automatically: `attach.sh` opens a shell with `dls-env` sourced, which sets `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, unsets `ROS_LOCALHOST_ONLY`, and generates a `FASTRTPS_DEFAULT_PROFILES_FILE` that pins Fast DDS's UDP transport to `ROBOT_NET_IFACE`'s IP address (Fast DDS whitelists by **IP address**, not interface name, unlike CycloneDDS).
+Inside the container this is already configured automatically: `attach.sh` opens a shell with `dls-env` sourced, which sets `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, sets `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET` (the Jazzy replacement for `ROS_LOCALHOST_ONLY`, which is unset), and generates a `FASTRTPS_DEFAULT_PROFILES_FILE` that pins Fast DDS's UDP transport to `ROBOT_NET_IFACE`'s IP address (Fast DDS whitelists by **IP address**, not interface name, unlike CycloneDDS).
 
 Verify before launching robot processes:
 
 ```bash
 echo "$RMW_IMPLEMENTATION"
 echo "$ROS_DOMAIN_ID"
+echo "$ROS_AUTOMATIC_DISCOVERY_RANGE"
 echo "$FASTRTPS_DEFAULT_PROFILES_FILE"
 cat "$FASTRTPS_DEFAULT_PROFILES_FILE"
 env | grep ROS_LOCALHOST_ONLY
@@ -105,9 +106,10 @@ Expected:
 ```text
 rmw_fastrtps_cpp
 42
+SUBNET
 ```
 
-The profiles file should exist and its `<interfaceWhiteList><address>` should match `ROBOT_NET_IFACE`'s IP, and `ROS_LOCALHOST_ONLY` must not be set.
+The profiles file should exist and its `<interfaceWhiteList><address>` should match `ROBOT_NET_IFACE`'s IP, and `ROS_LOCALHOST_ONLY` must not be set (deprecated since Iron; `ROS_AUTOMATIC_DISCOVERY_RANGE` replaces it).
 
 <details>
 <summary><b>Manual / outside-container setup</b></summary>
@@ -123,6 +125,7 @@ source /workspace/locoman_vla_deploy/muse/muse_ws/install/setup.bash
 
 unset ROS_LOCALHOST_ONLY
 unset ROS_STATIC_PEERS
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 export ROS_DOMAIN_ID=42
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ```

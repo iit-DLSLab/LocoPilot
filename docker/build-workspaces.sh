@@ -10,6 +10,7 @@ if [[ -f "$SCRIPT_DIR/.env" ]]; then
 fi
 
 CONTAINER_NAME="${CONTAINER_NAME:-locoman_vla_jazzy}"
+CONTAINER_WORKSPACE="${CONTAINER_WORKSPACE:-/workspace/locoman_vla_deploy}"
 
 # -t requires a real terminal; drop it when stdin isn't one (e.g. CI, scripts,
 # `docker exec -it` otherwise fails outright with "the input device is not a TTY").
@@ -18,4 +19,7 @@ if [[ -t 0 ]]; then
     docker_exec_flags+=(-t)
 fi
 
-exec docker exec "${docker_exec_flags[@]}" "$CONTAINER_NAME" build-dls-workspaces "$@"
+# Run the build script from the mounted repo, not the copy baked into the
+# image — script fixes then take effect without rebuilding the image.
+exec docker exec "${docker_exec_flags[@]}" "$CONTAINER_NAME" \
+    bash "$CONTAINER_WORKSPACE/docker/docker/build-dls-workspaces" "$@"

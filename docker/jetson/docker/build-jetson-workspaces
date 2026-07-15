@@ -70,28 +70,34 @@ build_ws() {
         --skip-keys "dls2_interface moveit_ros_perception warehouse_ros_mongo" \
         || true
 )
-# piper_sdk's setup.py points package_dir outside the package tree, which
-# breaks --symlink-install (see build-dls-workspaces); build it plain first.
+# piper_sdk (setup.py points package_dir outside the package tree) and
+# agx_arm_pd_g_controller (generate_parameter_library_py generates its
+# *_parameters.py module during setup.py, after the symlink farm is created)
+# both break under --symlink-install; build them plain first (see
+# build-dls-workspaces for details).
 (
     cd "$PIPER_WS"
-    python3 -m colcon build --packages-select piper_sdk \
+    python3 -m colcon build --packages-select piper_sdk agx_arm_pd_g_controller \
         --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 )
 build_ws "$PIPER_WS" \
     --packages-select "${PIPER_PACKAGES[@]}" \
-    --packages-skip piper_sdk
+    --packages-skip piper_sdk agx_arm_pd_g_controller
 source "$PIPER_WS/install/setup.bash"
 
 # 2. DLS manipulation workspace (manipulation_demo_recorder / haptic
-# teleoperation packages, discovered through ros2_ws/src symlink).
+# teleoperation packages, discovered through ros2_ws/src symlink). Plain
+# build: these packages use generate_parameter_library_py too.
 (
     cd "$MANIP_WS"
     rosdep install \
         --from-paths src \
         --ignore-src -r -y --rosdistro jazzy \
         || true
+    python3 -m colcon build \
+        --parallel-workers "$COLCON_JOBS" \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 )
-build_ws "$MANIP_WS"
 source "$MANIP_WS/install/setup.bash"
 
 echo
