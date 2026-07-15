@@ -16,3 +16,4 @@
 [submodule "dls_ros2_manipulation"]
 	path = dls_ros2_manipulation
 	url = git@github.com:iit-DLSLab/dls_ros2_manipulation.git
+	branch = feature/p2p_haptic_teleoperation

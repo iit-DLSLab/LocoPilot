@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -eo pipefail
+
+# Robot-side (Jetson) workspace build: only the packages needed for the
+# follower arm + camera stack. The MoveIt / rviz / dls2 bridge packages in
+# piper-ros2-dls are intentionally not built here — the Jetson image ships no
+# MoveIt or rviz, and the canonical dls2_interface (built from
+# unitree-ros2-dls on the laptop) is not part of this deployment.
+
+source /opt/ros/jazzy/setup.bash
+source /opt/deploy_venv/bin/activate
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
+PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
+COLCON_JOBS="${COLCON_JOBS:-4}"
+
+PIPER_ROOT="${PIPER_ROOT:-$WORKSPACE_ROOT/$PIPER_DIR}"
+PIPER_WS="$PIPER_ROOT/ros2_ws"
+MANIP_WS="$WORKSPACE_ROOT/ros2_ws"
+
+# Packages required by the follower-side teleop stack (teleop-session robot).
+PIPER_PACKAGES=(
+    piper_sdk
+    agx_arm_msgs
+    agx_arm_description
+    agx_arm_ctrl
+    agx_arm_pd_g_controller
+)
+
+for path in \
+    "$PIPER_WS/src" \
+    "$MANIP_WS/src/dls_ros2_manipulation"; do
+    if [[ ! -e "$path" ]]; then
+        echo "Required path not found: $path" >&2
+        echo "Clone the repo with the piper-ros2-dls and dls_ros2_manipulation submodules initialized." >&2
+        exit 1
+    fi
+done
+
+if [[ "${1:-}" == "--clean" ]]; then
+    echo "Removing existing Jazzy build artifacts..."
+    rm -rf \
+        "$PIPER_WS/build" "$PIPER_WS/install" "$PIPER_WS/log" \
+        "$MANIP_WS/build" "$MANIP_WS/install" "$MANIP_WS/log"
+fi
+
+build_ws() {
+    local ws="$1"
+    shift
+    echo
+    echo "================================================================"
+    echo "Building: $ws"
+    echo "================================================================"
+    cd "$ws"
+    python3 -m colcon build \
+        --symlink-install \
+        --parallel-workers "$COLCON_JOBS" \
+        "$@" \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+}
+
+# 1. Piper arm workspace, restricted to the teleop packages. rosdep runs with
+# -r so unresolvable keys (e.g. python3-mujoco-pip, satisfied by the image's
+# venv) do not abort the build.
+(
+    cd "$PIPER_WS"
+    rosdep install \
+        --from-paths src \
+        --ignore-src -r -y --rosdistro jazzy \
+        --skip-keys "dls2_interface moveit_ros_perception warehouse_ros_mongo" \
+        || true
+)
+# piper_sdk's setup.py points package_dir outside the package tree, which
+# breaks --symlink-install (see build-dls-workspaces); build it plain first.
+(
+    cd "$PIPER_WS"
+    python3 -m colcon build --packages-select piper_sdk \
+        --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+)
+build_ws "$PIPER_WS" \
+    --packages-select "${PIPER_PACKAGES[@]}" \
+    --packages-skip piper_sdk
+source "$PIPER_WS/install/setup.bash"
+
+# 2. DLS manipulation workspace (manipulation_demo_recorder / haptic
+# teleoperation packages, discovered through ros2_ws/src symlink).
+(
+    cd "$MANIP_WS"
+    rosdep install \
+        --from-paths src \
+        --ignore-src -r -y --rosdistro jazzy \
+        || true
+)
+build_ws "$MANIP_WS"
+source "$MANIP_WS/install/setup.bash"
+
+echo
+echo "Jetson deployment workspaces built successfully."
+echo "Deploy from the laptop with: docker/jetson/deploy-robot.sh"

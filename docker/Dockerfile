@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     joystick \
     procps \
     psmisc \
+    sudo \
     tmux \
     vim-tiny \
     ros-jazzy-rmw-fastrtps-cpp \
@@ -109,6 +110,8 @@ COPY docker/run-muse /usr/local/bin/run-muse
 COPY docker/run-controller /usr/local/bin/run-controller
 COPY docker/run-joy /usr/local/bin/run-joy
 COPY docker/check-stack /usr/local/bin/check-stack
+COPY docker/can-activate /usr/local/bin/can-activate
+COPY docker/teleop-session /usr/local/bin/teleop-session
 
 RUN chmod +x \
     /usr/local/bin/dls-env \
@@ -121,6 +124,8 @@ RUN chmod +x \
     /usr/local/bin/run-controller \
     /usr/local/bin/run-joy \
     /usr/local/bin/check-stack \
+    /usr/local/bin/can-activate \
+    /usr/local/bin/teleop-session \
     && printf '\n# DLS Jazzy deployment environment\nsource /usr/local/bin/dls-env\n' >> /root/.bashrc
 
 WORKDIR /workspace/locoman_vla_deploy

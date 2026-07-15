@@ -8,7 +8,7 @@ Dockerized ROS 2 Jazzy deployment stack for Unitree Go2 locomotion and AgileX Pi
 | [`muse`](./muse) | Base-state estimation | `jazzy-deploy` |
 | [`unitree-ros2-dls`](./unitree-ros2-dls) | Go2 HAL, shared DLS ROS 2 messages | `jazzy-deploy` |
 | [`piper-ros2-dls`](./piper-ros2-dls) | AgileX Piper arm HAL | `main` |
-| [`dls_ros2_manipulation`](./dls_ros2_manipulation) | Manipulation tooling — submodule only, not yet built (see `docker/README.md`) | `main` |
+| [`dls_ros2_manipulation`](./dls_ros2_manipulation) | Haptic teleoperation + demo recorder/cameras, built via the top-level `ros2_ws` | `feature/p2p_haptic_teleoperation` @ `95f1493` (TODO: merge upstream) |
 
 `docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule.
 
@@ -51,7 +51,7 @@ ping -c 3 192.168.123.18
 ./build-workspaces.sh --clean   # first build; drop --clean for incremental rebuilds
 ```
 
-Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §6) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): below.
+Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §6) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (dls_ros2_manipulation packages) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): below.
 
 ```bash
 ./attach.sh              # open a container shell — every deploy terminal starts here
@@ -148,6 +148,31 @@ Press D-pad up once and let the stand-up interpolation finish before toggling RL
 ## 7. Arm teleoperation
 
 The Piper HAL (`piper-ros2-dls`) is built automatically — no `EXTRA_ROS_WORKSPACES` entry needed. Real-hardware teleoperation needs three processes: one on the **host** (CAN activation), two inside the **container**.
+
+### One-command leader–follower deploy
+
+Two machines, two images: the **laptop image** (`locoman-vla-jazzy`, this directory) runs the leader stack; the **jetson image** (`locoman-vla-jetson`, [`jetson/`](./jetson/)) runs the follower stack on the Go2's Jetson.
+
+```bash
+# One-time robot install (from the laptop; Jetson needs Docker + NVIDIA
+# container toolkit + jetson-containers preinstalled):
+cd jetson && cp jetson.env.example .env   # TODO: set RealSense camera serials
+./install-robot.sh
+
+# Deploy (each attaches to a tmux session, one window per launch; C-b d detaches):
+jetson/deploy-robot.sh   # follower: arm ctrl + PD+g + two RealSense cameras (over ssh)
+./deploy-leader.sh       # leader:   arm ctrl + PD+g + p2p_teleoperation
+```
+
+Details:
+- `install-robot.sh` is idempotent: ssh key setup (`ssh-copy-id`, default password `123`) → clone/update this repo on the robot with only the `piper-ros2-dls` and `dls_ros2_manipulation` submodules → copy `.env` → `jetson-containers build ros:jazzy-ros-base` if the base image is missing → `jetson/build-image.sh` → `jetson/start.sh` → `build-jetson-workspaces` in the container. GitHub access from the robot uses ssh agent forwarding, so your laptop's key must be loaded (`ssh-add -l`).
+- The jetson image builds only the follower packages (`piper_sdk`, `agx_arm_msgs`, `agx_arm_description`, `agx_arm_ctrl`, `agx_arm_pd_g_controller`, plus the `dls_ros2_manipulation` packages) — no MoveIt, rviz, or dls2 bridge.
+- CAN activation runs inside the privileged container (`docker exec <name> can-activate`) on both sides — no host `sudo`. Re-run it (or just re-run the deploy script) after power-cycling an arm.
+- `teleop-session <leader|robot>` (in both images) creates the tmux session; re-running attaches to it. Kill everything with `C-b : kill-session`, or `jetson/stop.sh` / `./stop.sh`.
+- Camera serial numbers come from `GRIPPER_CAMERA_SERIAL` / `WORLD_CAMERA_SERIAL` in `jetson/.env` (TODO: fill in; find them with `rs-enumerate-devices -s` on the robot). They are baked into the container environment — after changing them run `jetson/remove-container.sh` then `jetson/start.sh` (or re-run `install-robot.sh`).
+- `haptic_teleoperation` and `manipulation_demo_recorder` come from `dls_ros2_manipulation`, pinned to `feature/p2p_haptic_teleoperation` @ `95f1493` and built through the top-level `ros2_ws` (its `src/dls_ros2_manipulation` symlink keeps colcon artifacts out of the submodule). TODO: merge that branch into `main` upstream and re-pin.
+
+The manual equivalents follow.
 
 **Host — activate the CAN interface** (requires `sudo`, physical CAN adapter plugged in):
 ```bash

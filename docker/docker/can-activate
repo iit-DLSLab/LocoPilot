@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Activate the Piper arm's CAN interface from inside the container. The
+# container is privileged and shares the host network namespace, so bringing
+# the interface up here configures the host's CAN adapter directly — no
+# host-side sudo session is needed. Re-run after power-cycling the arm.
+#
+# Usage: can-activate [can_name] [bitrate] [usb_address]
+# (same arguments as agx_arm_ros/scripts/can_activate.sh)
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
+PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
+PIPER_ROOT="${PIPER_ROOT:-$WORKSPACE_ROOT/$PIPER_DIR}"
+
+CAN_ACTIVATE_SCRIPT="$PIPER_ROOT/ros2_ws/src/agx_arm_ros/scripts/can_activate.sh"
+
+if [[ ! -f "$CAN_ACTIVATE_SCRIPT" ]]; then
+    echo "can_activate.sh not found: $CAN_ACTIVATE_SCRIPT" >&2
+    echo "Is the piper-ros2-dls submodule initialized and mounted?" >&2
+    exit 1
+fi
+
+cd "$(dirname "$CAN_ACTIVATE_SCRIPT")"
+exec bash "$CAN_ACTIVATE_SCRIPT" "$@"

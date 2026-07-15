@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -eo pipefail
+# shellcheck disable=SC1091
+source /usr/local/bin/dls-env
+
+# DLS2 blind-state bridge: publishes ArmState on /arm_state (see README §8).
+# piper_hal.py activates the CAN interface itself; if that proves unreliable
+# run `can-activate` first (or the host-side can_activate.sh).
+exec ros2 run dls2_piper_bridge piper_hal "$@"

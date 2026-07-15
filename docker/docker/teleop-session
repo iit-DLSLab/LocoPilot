@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Create (or attach to) the tmux session running the arm teleoperation stack.
+#
+# Usage: teleop-session <leader|robot>
+#
+#   leader → arm-ctrl (namespace:=leader) + pd-g + p2p-teleop
+#   robot  → arm-ctrl (namespace:=follower) + pd-g + cameras
+#
+# Each window sources dls-env before launching, exactly like an attach.sh
+# shell. Detach with C-b d; switch windows with C-b <number>. Killing the
+# session (C-b : kill-session) stops every launch process.
+#
+# Camera serial numbers come from GRIPPER_CAMERA_SERIAL / WORLD_CAMERA_SERIAL
+# (set in docker/jetson/.env). When unset, the launch-file defaults are used.
+
+ROLE="${1:-}"
+if [[ "$ROLE" != "leader" && "$ROLE" != "robot" ]]; then
+    echo "Usage: teleop-session <leader|robot>" >&2
+    exit 1
+fi
+
+SESSION="teleop-$ROLE"
+TCP_OFFSET='[0.0, 0.0, 0.14, 0.0, 0.0, 0.0]'
+
+if [[ "$ROLE" == "leader" ]]; then
+    ARM_NAMESPACE=leader
+else
+    ARM_NAMESPACE=follower
+fi
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Session $SESSION already exists, attaching."
+    exec tmux attach -t "$SESSION"
+fi
+
+# Every window wraps its launch command so the DLS ROS environment is sourced
+# first and the window stays open after the process exits, keeping the error
+# output readable instead of vanishing with the pane.
+window_cmd() {
+    printf 'source /usr/local/bin/dls-env && %s; echo; echo "[teleop-session] process exited (status $?)"; exec bash' "$1"
+}
+
+ARM_CTRL_CMD="ros2 launch agx_arm_ctrl start_single_agx_arm_rviz.launch.py \
+namespace:=$ARM_NAMESPACE \
+tcp_offset:='$TCP_OFFSET' \
+arm_type:=piper_l \
+effector_type:=agx_gripper"
+
+PD_G_CMD="ros2 launch agx_arm_pd_g_controller pd_g_controller.launch.py \
+namespace:=$ARM_NAMESPACE \
+enable_gravity_compensation:=true \
+use_gripper:=true"
+
+tmux new-session -d -s "$SESSION" -n arm-ctrl \
+    bash -c "$(window_cmd "$ARM_CTRL_CMD")"
+
+# The PD controller subscribes to the arm controller's topics; give the
+# controller a moment to come up before the dependent windows start.
+tmux new-window -t "$SESSION" -n pd-g \
+    bash -c "$(window_cmd "sleep 3 && $PD_G_CMD")"
+
+if [[ "$ROLE" == "leader" ]]; then
+    tmux new-window -t "$SESSION" -n p2p-teleop \
+        bash -c "$(window_cmd "sleep 5 && ros2 launch haptic_teleoperation p2p_teleoperation.launch.py")"
+else
+    # TODO: set the RealSense serial numbers for this robot's cameras in
+    # docker/jetson/.env (GRIPPER_CAMERA_SERIAL / WORLD_CAMERA_SERIAL). Find
+    # them with: rs-enumerate-devices -s
+    CAMERAS_CMD="ros2 launch manipulation_demo_recorder two_realsense_cameras.launch.py"
+    if [[ -n "${GRIPPER_CAMERA_SERIAL:-}" ]]; then
+        CAMERAS_CMD+=" gripper_camera_serial_no:=$GRIPPER_CAMERA_SERIAL"
+    fi
+    if [[ -n "${WORLD_CAMERA_SERIAL:-}" ]]; then
+        CAMERAS_CMD+=" world_camera_serial_no:=$WORLD_CAMERA_SERIAL"
+    fi
+    tmux new-window -t "$SESSION" -n cameras \
+        bash -c "$(window_cmd "$CAMERAS_CMD")"
+fi
+
+tmux select-window -t "$SESSION:arm-ctrl"
+exec tmux attach -t "$SESSION"

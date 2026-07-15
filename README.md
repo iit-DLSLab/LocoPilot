@@ -8,7 +8,7 @@ Dockerized ROS 2 Jazzy deployment stack for Unitree Go2 locomotion and AgileX Pi
 | [`muse`](./muse) | Base-state estimation | `jazzy-deploy` |
 | [`unitree-ros2-dls`](./unitree-ros2-dls) | Go2 HAL, shared DLS ROS 2 messages | `jazzy-deploy` |
 | [`piper-ros2-dls`](./piper-ros2-dls) | AgileX Piper arm HAL | `main` |
-| [`dls_ros2_manipulation`](./dls_ros2_manipulation) | Manipulation tooling — submodule only, not yet built (see `docker/README.md`) | `main` |
+| [`dls_ros2_manipulation`](./dls_ros2_manipulation) | Haptic teleoperation + demo recorder/cameras, built via the top-level `ros2_ws` | `feature/p2p_haptic_teleoperation` @ `95f1493` (TODO: merge upstream) |
 
 `docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule.
 
@@ -75,7 +75,7 @@ cd docker
 ./build-workspaces.sh --clean   # first build; drop --clean for incremental rebuilds
 ```
 
-Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §9) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): `docker/README.md`.
+Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §9) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (dls_ros2_manipulation packages) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): `docker/README.md`.
 
 ```bash
 ./attach.sh              # open a container shell — every deploy terminal starts here
@@ -332,6 +332,34 @@ Press D-pad Up once and wait for the standing interpolation to finish before tog
 
 The AgileX Piper arm HAL (`piper-ros2-dls`) is built automatically by `build-workspaces.sh` — it does not need an `EXTRA_ROS_WORKSPACES` entry. Real-hardware teleoperation needs three processes: one on the **host** (CAN bus activation) and two inside the **container** (arm controller + gravity-compensated PD controller).
 
+### One-command leader–follower deploy
+
+Leader–follower teleoperation runs on two machines, each with its own image:
+
+| Side | Machine | Image | Processes |
+|---|---|---|---|
+| **Leader** | Laptop (leader arm's CAN adapter attached) | `locoman-vla-jazzy` (the **laptop image**, this repo's default) | leader arm controller, PD+gravity controller, `p2p_teleoperation` |
+| **Follower** | Unitree Go2 Jetson (`unitree@192.168.123.18`) | `locoman-vla-jetson` (the **jetson image**, `docker/jetson/`) | follower arm controller, PD+gravity controller, two RealSense cameras |
+
+**Robot installation** (one-time, run from the laptop; prerequisites on the Jetson: Docker + NVIDIA container toolkit + [jetson-containers](https://github.com/dusty-nv/jetson-containers) installed, internet through the router):
+
+```bash
+cd docker/jetson
+cp jetson.env.example .env    # TODO: set the RealSense camera serial numbers here
+./install-robot.sh            # ssh key setup → clone repo → base + jetson image → workspaces
+```
+
+**Deploy** (each command activates CAN and attaches to a tmux session with one window per launch — detach with `C-b d`, switch windows with `C-b 1/2/3`, kill everything with `C-b : kill-session`):
+
+```bash
+docker/jetson/deploy-robot.sh   # follower stack on the Jetson (handles ssh)
+docker/deploy-leader.sh         # leader stack on this laptop
+```
+
+Both wrap `teleop-session <leader|robot>` inside the respective container; re-running re-attaches to the existing session. CAN activation now runs *inside* the privileged container (`can-activate`), so no host `sudo` is needed on either side. `haptic_teleoperation` comes from the `dls_ros2_manipulation` submodule, pinned to `feature/p2p_haptic_teleoperation` (`95f1493`) and built into the top-level `ros2_ws` (TODO: merge that branch into `main` upstream and re-pin).
+
+The manual equivalents of each step are below.
+
 ### Host — activate the CAN interface
 
 Run on the host, *before* attaching to the container (requires `sudo`, and the physical CAN adapter plugged in):
@@ -341,7 +369,7 @@ cd piper-ros2-dls/ros2_ws/src/agx_arm_ros/scripts
 sudo bash ./can_activate.sh
 ```
 
-This brings `can0` up at 1 Mbit/s. The container runs with `--network host`, so the interface is visible inside it immediately — re-run this on the host any time the arm is power-cycled or the CAN interface drops.
+This brings `can0` up at 1 Mbit/s. The container runs with `--network host`, so the interface is visible inside it immediately — re-run this on the host any time the arm is power-cycled or the CAN interface drops. Equivalent, without host `sudo` (the container is privileged and shares the host network namespace): `docker exec locoman_vla_jazzy can-activate` — this is what the deploy scripts use.
 
 ### Terminal 1 — arm controller
 

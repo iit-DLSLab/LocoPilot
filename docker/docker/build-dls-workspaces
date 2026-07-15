@@ -22,6 +22,7 @@ UNITREE_SDK_WS="$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws"
 UNITREE_DLS_WS="$UNITREE_DLS_ROOT/ros2_ws"
 MUSE_WS="$MUSE_ROOT/muse_ws"
 PIPER_WS="$PIPER_ROOT/ros2_ws"
+MANIP_WS="$WORKSPACE_ROOT/ros2_ws"
 CONTROLLER_MSG_WS="$LOCOMANIP_ROOT/deploy/ros2_ws"
 
 for path in \
@@ -51,7 +52,8 @@ if [[ "${1:-}" == "--clean" ]]; then
         "$UNITREE_SDK_WS/build" "$UNITREE_SDK_WS/install" "$UNITREE_SDK_WS/log" \
         "$UNITREE_DLS_WS/build" "$UNITREE_DLS_WS/install" "$UNITREE_DLS_WS/log" \
         "$MUSE_WS/build" "$MUSE_WS/install" "$MUSE_WS/log" \
-        "$PIPER_WS/build" "$PIPER_WS/install" "$PIPER_WS/log"
+        "$PIPER_WS/build" "$PIPER_WS/install" "$PIPER_WS/log" \
+        "$MANIP_WS/build" "$MANIP_WS/install" "$MANIP_WS/log"
 
     if [[ -L "$CONTROLLER_MSG_WS/install" ]]; then
         rm -f "$CONTROLLER_MSG_WS/install"
@@ -153,6 +155,24 @@ if [[ -d "$PIPER_WS/src" ]]; then
     source "$PIPER_WS/install/setup.bash"
 else
     echo "Piper workspace not found, skipping: $PIPER_WS/src" >&2
+fi
+
+# 5. DLS manipulation workspace (haptic_teleoperation, manipulation_demo_recorder).
+# The dls_ros2_manipulation submodule has no ros2_ws of its own; its packages
+# are discovered through the committed symlink ros2_ws/src/dls_ros2_manipulation
+# so colcon artifacts land in the top-level ros2_ws instead of dirtying the
+# submodule working tree.
+if [[ -d "$MANIP_WS/src/dls_ros2_manipulation" ]]; then
+    (
+        cd "$MANIP_WS"
+        rosdep install \
+            --from-paths src \
+            --ignore-src -r -y --rosdistro jazzy
+    )
+    build_ws "$MANIP_WS"
+    source "$MANIP_WS/install/setup.bash"
+else
+    echo "Manipulation workspace not found, skipping: $MANIP_WS/src/dls_ros2_manipulation" >&2
 fi
 
 # Optional additional Jazzy workspaces, such as the arm teleoperation workspace.

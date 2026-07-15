@@ -27,6 +27,7 @@ _dls_source_if_present "$UNITREE_DLS_ROOT/unitree_ros2/cyclonedds_ws/install/set
 _dls_source_if_present "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash"
 _dls_source_if_present "$MUSE_ROOT/muse_ws/install/setup.bash"
 _dls_source_if_present "$PIPER_ROOT/ros2_ws/install/setup.bash"
+_dls_source_if_present "$WORKSPACE_ROOT/ros2_ws/install/setup.bash"
 
 if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
     _dls_old_ifs="$IFS"

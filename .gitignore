@@ -1,5 +1,11 @@
 # Local Docker configuration
 docker/.env
+docker/jetson/.env
+
+# Top-level colcon workspace (dls_ros2_manipulation build artifacts)
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
 
 # Exported Docker images
 *.tar
