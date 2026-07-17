@@ -72,6 +72,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-librealsense2 \
     ros-jazzy-realsense2-camera-msgs \
     ros-jazzy-realsense2-camera \
+    # image_transport plugin so the RealSense image topics also advertise
+    # lossless /zstd variants (picked up by the camera node at runtime)
+    ros-jazzy-zstd-image-transport \
     liburdfdom-headers-dev \
     can-utils \
     python3-can \
