@@ -361,6 +361,24 @@ docker/deploy-leader.sh         # leader stack on this laptop
 
 Both wrap `teleop-session <leader|robot>` inside the respective container; re-running re-attaches to the existing session. CAN activation now runs *inside* the privileged container (`can-activate`), so no host `sudo` is needed on either side. `haptic_teleoperation` comes from the `dls_ros2_manipulation` submodule, pinned to `feature/p2p_haptic_teleoperation` (`95f1493`) and built into the top-level `ros2_ws` (TODO: merge that branch into `main` upstream and re-pin).
 
+### One-command VLA deploy
+
+To run the robot-side stack a VLA policy drives (instead of teleoperation), use:
+
+```bash
+docker/jetson/deploy-vla.sh      # VLA robot stack on the Jetson (handles ssh)
+```
+
+This wraps `vla-session` inside the Jetson container (same CAN activation and tmux conventions as above; re-running re-attaches). It launches, in one window each:
+
+| Window | Processes |
+|---|---|
+| `arm-ctrl` | follower arm controller (`start_single_agx_arm_rviz.launch.py`, namespace `follower`) — same as the teleop robot |
+| `controllers` | `ros2_control_node` + `/arm_controller` and `/gripper_controller` joint trajectory controllers + `joint_state_broadcaster` (JTC config from the `agx_arm_ros` MoveIt launch) |
+| `cameras` | gripper + world RealSense cameras — same as the teleop robot |
+
+Unlike teleop, there is **no PD+gravity controller**: the VLA commands the arm through the `/arm_controller` and `/gripper_controller` trajectory controllers. Their `ros2_control_node` runs `mock_components/GenericSystem` hardware and publishes joint state on `follower/control/joint_states`, which the arm controller node forwards to the real arm over CAN — the same wiring MoveIt uses (`launch/vla_arm_controllers.launch.py` reuses the MoveIt `robot_description` builder as the single source of truth).
+
 The manual equivalents of each step are below.
 
 ### Host — activate the CAN interface

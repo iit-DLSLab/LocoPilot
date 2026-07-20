@@ -4,7 +4,7 @@
 # produced by jetson-containers (see docker/README.md, "Jetson image").
 #
 # Build context is the parent docker/ directory so the in-container scripts
-# (dls-env, entrypoint, can-activate, teleop-session) are shared with the
+# (dls-env, entrypoint, can-activate, teleop-session, vla-session) are shared with the
 # laptop image:  docker build -f jetson/Dockerfile <docker dir>
 ARG BASE_IMAGE=ros:jazzy-ros-base
 FROM ${BASE_IMAGE}
@@ -90,6 +90,7 @@ COPY docker/entrypoint.sh /usr/local/bin/dls-entrypoint
 COPY docker/build-extra-workspace /usr/local/bin/build-extra-workspace
 COPY docker/can-activate /usr/local/bin/can-activate
 COPY docker/teleop-session /usr/local/bin/teleop-session
+COPY docker/vla-session /usr/local/bin/vla-session
 COPY jetson/docker/build-jetson-workspaces /usr/local/bin/build-jetson-workspaces
 
 RUN chmod +x \
@@ -98,6 +99,7 @@ RUN chmod +x \
     /usr/local/bin/build-extra-workspace \
     /usr/local/bin/can-activate \
     /usr/local/bin/teleop-session \
+    /usr/local/bin/vla-session \
     /usr/local/bin/build-jetson-workspaces \
     && printf '\n# DLS Jazzy deployment environment\nsource /usr/local/bin/dls-env\n' >> /root/.bashrc \
     && printf 'set -g mouse on\nset -g set-clipboard on\n' >> /root/.tmux.conf

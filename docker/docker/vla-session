@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Create (or attach to) the tmux session running the robot-side VLA
+# deployment stack:
+#
+#   arm-ctrl    → agx_arm_ctrl (namespace:=follower), same as teleop robot
+#   controllers → ros2_control_node + /arm_controller and /gripper_controller
+#                 joint trajectory controllers (JTC config taken from the
+#                 agx_arm_ros MoveIt launch) + joint_state_broadcaster
+#   cameras     → gripper + world RealSense cameras, same as teleop robot
+#
+# Unlike teleop, there is no PD+gravity controller: the VLA drives the arm
+# through the JTCs. Each window sources dls-env before launching, exactly like
+# an attach.sh shell. Detach with C-b d; switch windows with C-b <number>.
+# Killing the session (C-b : kill-session) stops every launch process.
+#
+# Camera serial numbers come from GRIPPER_CAMERA_SERIAL / WORLD_CAMERA_SERIAL
+# (set in docker/jetson/.env). When unset, the launch-file defaults are used.
+
+SESSION="vla-robot"
+ARM_NAMESPACE=follower
+TCP_OFFSET='[0.0, 0.0, 0.14, 0.0, 0.0, 0.0]'
+
+if tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "Session $SESSION already exists, attaching."
+    exec tmux attach -t "$SESSION"
+fi
+
+# Every window wraps its launch command so the DLS ROS environment is sourced
+# first and the window stays open after the process exits, keeping the error
+# output readable instead of vanishing with the pane.
+window_cmd() {
+    printf 'source /usr/local/bin/dls-env && %s; echo; echo "[vla-session] process exited (status $?)"; exec bash' "$1"
+}
+
+ARM_CTRL_CMD="ros2 launch agx_arm_ctrl start_single_agx_arm_rviz.launch.py \
+namespace:=$ARM_NAMESPACE \
+tcp_offset:='$TCP_OFFSET' \
+arm_type:=piper_l \
+effector_type:=agx_gripper"
+
+CONTROLLERS_CMD="ros2 launch $WORKSPACE_ROOT/launch/vla_arm_controllers.launch.py \
+namespace:=$ARM_NAMESPACE \
+tcp_offset:='$TCP_OFFSET' \
+arm_type:=piper_l \
+effector_type:=agx_gripper"
+
+CAMERAS_CMD="ros2 launch $WORKSPACE_ROOT/launch/two_realsense_cameras.launch.py"
+
+tmux new-session -d -s "$SESSION" -n arm-ctrl \
+    bash -c "$(window_cmd "$ARM_CTRL_CMD")"
+
+# The controllers' ros2_control_node feeds control/joint_states, which the arm
+# controller node consumes; give the arm controller a moment to come up first.
+tmux new-window -t "$SESSION" -n controllers \
+    bash -c "$(window_cmd "sleep 3 && $CONTROLLERS_CMD")"
+
+tmux new-window -t "$SESSION" -n cameras \
+    bash -c "$(window_cmd "$CAMERAS_CMD")"
+
+tmux select-window -t "$SESSION:arm-ctrl"
+exec tmux attach -t "$SESSION"
