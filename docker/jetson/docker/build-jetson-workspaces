@@ -2,10 +2,12 @@
 set -eo pipefail
 
 # Robot-side (Jetson) workspace build: only the packages needed for the
-# follower arm + camera stack. The MoveIt / rviz / dls2 bridge packages in
-# piper-ros2-dls are intentionally not built here — the Jetson image ships no
-# MoveIt or rviz, and the canonical dls2_interface (built from
-# unitree-ros2-dls on the laptop) is not part of this deployment.
+# follower arm + camera stack, plus agx_arm_moveit (built for its config/
+# xacro files only -- vla_arm_controllers.launch.py reuses its ros2_control
+# URDF; move_group/rviz/warehouse are never launched on the robot). The dls2
+# bridge packages in piper-ros2-dls are intentionally not built here — the
+# canonical dls2_interface (built from unitree-ros2-dls on the laptop) is not
+# part of this deployment.
 
 source /opt/ros/jazzy/setup.bash
 source /opt/deploy_venv/bin/activate
@@ -25,6 +27,7 @@ PIPER_PACKAGES=(
     agx_arm_description
     agx_arm_ctrl
     agx_arm_pd_g_controller
+    agx_arm_moveit
 )
 
 for path in \
@@ -59,15 +62,17 @@ build_ws() {
         --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 }
 
-# 1. Piper arm workspace, restricted to the teleop packages. rosdep runs with
-# -r so unresolvable keys (e.g. python3-mujoco-pip, satisfied by the image's
-# venv) do not abort the build.
+# 1. Piper arm workspace, restricted to the teleop packages (+ agx_arm_moveit,
+# built for its config files only). rosdep runs with -r so unresolvable keys
+# do not abort the build; the skipped moveit/warehouse/rviz-integration keys
+# are agx_arm_moveit exec_depends for move_group/rviz/warehouse, none of which
+# the VLA stack launches on the robot -- only its config/ xacro files are used.
 (
     cd "$PIPER_WS"
     rosdep install \
         --from-paths src \
         --ignore-src -r -y --rosdistro jazzy \
-        --skip-keys "dls2_interface moveit_ros_perception warehouse_ros_mongo" \
+        --skip-keys "dls2_interface moveit_ros_perception moveit_ros_move_group moveit_ros_visualization moveit_ros_warehouse moveit_simple_controller_manager moveit_planners moveit_kinematics moveit_configs_utils warehouse_ros_mongo" \
         || true
 )
 # piper_sdk (setup.py points package_dir outside the package tree) and

@@ -1,7 +1,8 @@
-import sys
+import ast
+import os
 import tempfile
-from pathlib import Path
 
+import xacro
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -9,24 +10,39 @@ from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 
-# Reuse the exact robot_description built by the agx_arm_ros MoveIt config so
-# the ros2_control joint/hardware definitions stay in lock-step with MoveIt
-# and teleoperation. The launch dir (with _moveit_config_builder.py) is
-# installed to share/agx_arm_moveit/launch by the package's CMakeLists.
-_MOVEIT_LAUNCH_DIR = Path(get_package_share_directory("agx_arm_moveit")) / "launch"
-sys.path.insert(0, str(_MOVEIT_LAUNCH_DIR))
+# We run xacro on the agx_arm_moveit package's ros2_control URDF directly
+# instead of going through moveit_configs_utils/move_group -- the VLA stack
+# only needs the robot_description + ros2_control tags for the mock-hardware
+# controller_manager, not planning/rviz.
+_CONFIG_DIR = os.path.join(get_package_share_directory("agx_arm_moveit"), "config")
+_URDF_XACRO = os.path.join(_CONFIG_DIR, "agx_arm.urdf.xacro")
+_INITIAL_POSITIONS = os.path.join(_CONFIG_DIR, "initial_positions.yaml")
 
-from _moveit_config_builder import build_moveit_config  # noqa: E402
+
+def _build_robot_description(arm_type, effector_type, revo2_type, tcp_offset):
+    """Run xacro on the vendored URDF and return the {robot_description: xml} dict."""
+    doc = xacro.process_file(
+        _URDF_XACRO,
+        mappings={
+            "arm_type": arm_type,
+            "effector_type": effector_type,
+            "revo2_type": revo2_type,
+            "initial_positions_file": _INITIAL_POSITIONS,
+            "tcp_offset_xyz": f"{tcp_offset[0]} {tcp_offset[1]} {tcp_offset[2]}",
+            "tcp_offset_rpy": f"{tcp_offset[3]} {tcp_offset[4]} {tcp_offset[5]}",
+        },
+    )
+    return {"robot_description": doc.toxml()}
 
 
-def _build_ros2_controllers_file(arm_type, namespace):
+def _build_ros2_controllers_file(arm_type, effector_type, namespace):
     """Write a ros2_controllers config to a temp YAML and return its path.
 
-    Mirrors agx_arm_moveit/launch/demo.launch.py::_build_ros2_controllers_file
-    (which reads config/ros2_controllers.yaml), restricted to the two JTCs the
-    VLA deployment drives: /arm_controller and /gripper_controller, plus the
-    joint_state_broadcaster that publishes the mock-hardware state which the
-    arm control node forwards to the real arm.
+    Same controller definitions as agx_arm_moveit/config/ros2_controllers.yaml
+    (and demo.launch.py), restricted to the two JTCs the VLA deployment drives
+    -- /arm_controller and /gripper_controller -- plus the
+    joint_state_broadcaster that publishes the mock-hardware state the arm
+    control node forwards to the real arm.
     """
     arm_joints = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
     if arm_type == "nero":
@@ -36,19 +52,17 @@ def _build_ros2_controllers_file(arm_type, namespace):
     prefix = f"/{ns}" if ns else ""
     cm_node = f"{prefix}/controller_manager"
 
-    jtc = {"type": "joint_trajectory_controller/JointTrajectoryController"}
+    def jtc():
+        return {"type": "joint_trajectory_controller/JointTrajectoryController"}
 
-    config = {
-        cm_node: {
-            "ros__parameters": {
-                "update_rate": 200,
-                "arm_controller": jtc,
-                "gripper_controller": jtc,
-                "joint_state_broadcaster": {
-                    "type": "joint_state_broadcaster/JointStateBroadcaster",
-                },
-            },
+    cm_controllers = {
+        "update_rate": 200,
+        "arm_controller": jtc(),
+        "joint_state_broadcaster": {
+            "type": "joint_state_broadcaster/JointStateBroadcaster",
         },
+    }
+    config = {
         f"{prefix}/arm_controller": {
             "ros__parameters": {
                 "allow_nonzero_velocity_at_trajectory_end": False,
@@ -57,15 +71,20 @@ def _build_ros2_controllers_file(arm_type, namespace):
                 "state_interfaces": ["position", "velocity"],
             },
         },
-        f"{prefix}/gripper_controller": {
+    }
+
+    if effector_type == "agx_gripper":
+        cm_controllers["gripper_controller"] = jtc()
+        config[f"{prefix}/gripper_controller"] = {
             "ros__parameters": {
                 "allow_nonzero_velocity_at_trajectory_end": False,
                 "joints": ["gripper"],
                 "command_interfaces": ["position"],
                 "state_interfaces": ["position", "velocity"],
             },
-        },
-    }
+        }
+
+    config[cm_node] = {"ros__parameters": cm_controllers}
 
     tmp = tempfile.NamedTemporaryFile(
         mode="w", suffix=".yaml", prefix="vla_ros2_controllers_", delete=False
@@ -78,14 +97,21 @@ def _build_ros2_controllers_file(arm_type, namespace):
 def _launch(context):
     namespace = LaunchConfiguration("namespace").perform(context)
     arm_type = LaunchConfiguration("arm_type").perform(context)
-    moveit_config = build_moveit_config(context)
+    effector_type = LaunchConfiguration("effector_type").perform(context)
+    revo2_type = LaunchConfiguration("revo2_type").perform(context)
+    tcp_offset = ast.literal_eval(LaunchConfiguration("tcp_offset").perform(context))
 
-    ros2_controllers_yaml = _build_ros2_controllers_file(arm_type, namespace)
+    robot_description = _build_robot_description(
+        arm_type, effector_type, revo2_type, tcp_offset
+    )
+    ros2_controllers_yaml = _build_ros2_controllers_file(
+        arm_type, effector_type, namespace
+    )
 
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[moveit_config.robot_description, ros2_controllers_yaml],
+        parameters=[robot_description, ros2_controllers_yaml],
         # The mock-hardware state the joint_state_broadcaster publishes on
         # `joint_states` is what the arm control node consumes as
         # control/joint_states to drive the real arm (same wiring as MoveIt).
@@ -101,15 +127,16 @@ def _launch(context):
             output="screen",
         )
 
+    controllers = ["joint_state_broadcaster", "arm_controller"]
+    if effector_type == "agx_gripper":
+        controllers.append("gripper_controller")
+
     return [
         GroupAction(
             actions=[
                 PushRosNamespace(namespace),
-                SetRemap(src="/robot_description", dst="robot_description"),
                 control_node,
-                spawner("joint_state_broadcaster"),
-                spawner("arm_controller"),
-                spawner("gripper_controller"),
+                *[spawner(c) for c in controllers],
             ]
         )
     ]
@@ -128,21 +155,20 @@ def generate_launch_description():
                 "arm_type",
                 default_value="piper_l",
                 choices=["piper", "piper_x", "piper_l", "piper_h", "nero"],
-                description="Arm type (feeds the MoveIt robot_description).",
+                description="Arm type (feeds the robot_description).",
             ),
             DeclareLaunchArgument(
                 "effector_type",
                 default_value="agx_gripper",
                 choices=["none", "agx_gripper", "revo2"],
-                description="End effector type (feeds the MoveIt "
-                "robot_description).",
+                description="End effector type (feeds the robot_description "
+                "and decides whether /gripper_controller is spawned).",
             ),
             DeclareLaunchArgument(
                 "revo2_type",
                 default_value="left",
                 choices=["left", "right"],
-                description="Revo2 side (used when effector_type is revo2); "
-                "feeds the MoveIt robot_description.",
+                description="Revo2 side (used when effector_type is revo2).",
             ),
             DeclareLaunchArgument(
                 "tcp_offset",

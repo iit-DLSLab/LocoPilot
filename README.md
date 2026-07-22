@@ -377,7 +377,9 @@ This wraps `vla-session` inside the Jetson container (same CAN activation and tm
 | `controllers` | `ros2_control_node` + `/arm_controller` and `/gripper_controller` joint trajectory controllers + `joint_state_broadcaster` (JTC config from the `agx_arm_ros` MoveIt launch) |
 | `cameras` | gripper + world RealSense cameras — same as the teleop robot |
 
-Unlike teleop, there is **no PD+gravity controller**: the VLA commands the arm through the `/arm_controller` and `/gripper_controller` trajectory controllers. Their `ros2_control_node` runs `mock_components/GenericSystem` hardware and publishes joint state on `follower/control/joint_states`, which the arm controller node forwards to the real arm over CAN — the same wiring MoveIt uses (`launch/vla_arm_controllers.launch.py` reuses the MoveIt `robot_description` builder as the single source of truth).
+Unlike teleop, there is **no PD+gravity controller**: the VLA commands the arm through the `/arm_controller` and `/gripper_controller` trajectory controllers. Their `ros2_control_node` runs `mock_components/GenericSystem` hardware and publishes joint state on `follower/control/joint_states`, which the arm controller node forwards to the real arm over CAN — the same wiring MoveIt uses.
+
+`launch/vla_arm_controllers.launch.py` builds its `robot_description` by running `xacro` on `agx_arm_moveit`'s ros2_control URDF (`agx_arm.urdf.xacro`). `agx_arm_moveit` is built on the Jetson for its `config/`/`launch/` files only — its MoveIt/rviz/warehouse exec_depends are skipped in `rosdep install` since `move_group`, rviz, and the warehouse DB are never launched on the robot.
 
 The manual equivalents of each step are below.
 

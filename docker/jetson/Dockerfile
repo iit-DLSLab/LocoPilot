@@ -64,6 +64,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rviz2 \
     ros-jazzy-xacro \
     ros-jazzy-moveit-msgs \
+    # ros2_control stack for the VLA deploy (vla-session): controller_manager +
+    # mock_components (ros2-control) and the joint_trajectory / joint_state
+    # broadcaster controllers (ros2-controllers). Teleop does not use these.
+    ros-jazzy-ros2-control \
+    ros-jazzy-ros2-controllers \
     ros-jazzy-topic-tools \
     ros-jazzy-generate-parameter-library \
     ros-jazzy-generate-parameter-library-py \
