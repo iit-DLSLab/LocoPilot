@@ -64,6 +64,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-jazzy-rviz2 \
     ros-jazzy-xacro \
     ros-jazzy-moveit-msgs \
+    # moveit_configs_utils: vla_arm_controllers.launch.py imports
+    # agx_arm_moveit's own MoveItConfigsBuilder-based robot_description
+    # builder, so the VLA ros2_control_node gets the identical URDF the real
+    # MoveIt launch (demo.launch.py) uses. Does not pull in move_group/rviz.
+    ros-jazzy-moveit-configs-utils \
     # ros2_control stack for the VLA deploy (vla-session): controller_manager +
     # mock_components (ros2-control) and the joint_trajectory / joint_state
     # broadcaster controllers (ros2-controllers). Teleop does not use these.

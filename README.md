@@ -379,7 +379,9 @@ This wraps `vla-session` inside the Jetson container (same CAN activation and tm
 
 Unlike teleop, there is **no PD+gravity controller**: the VLA commands the arm through the `/arm_controller` and `/gripper_controller` trajectory controllers. Their `ros2_control_node` runs `mock_components/GenericSystem` hardware and publishes joint state on `follower/control/joint_states`, which the arm controller node forwards to the real arm over CAN — the same wiring MoveIt uses.
 
-`launch/vla_arm_controllers.launch.py` builds its `robot_description` by running `xacro` on `agx_arm_moveit`'s ros2_control URDF (`agx_arm.urdf.xacro`). `agx_arm_moveit` is built on the Jetson for its `config/`/`launch/` files only — its MoveIt/rviz/warehouse exec_depends are skipped in `rosdep install` since `move_group`, rviz, and the warehouse DB are never launched on the robot.
+`launch/vla_arm_controllers.launch.py` imports `agx_arm_moveit`'s own `_moveit_config_builder.build_moveit_config()` (the same helper `agx_arm_moveit/launch/demo.launch.py` uses) to build `robot_description`, so the VLA `ros2_control_node` gets byte-for-byte the same URDF as `ros2 launch agx_arm_ctrl start_single_agx_arm_moveit.launch.py`. `agx_arm_moveit` is built on the Jetson for its `config/`/`launch/` files only — its MoveIt/rviz/warehouse exec_depends are skipped in `rosdep install` since `move_group`, rviz, and the warehouse DB are never launched on the robot.
+
+Since the arm-ctrl window's `start_single_agx_arm_rviz.launch.py` also runs its own `robot_state_publisher` (for display), and Jazzy's `controller_manager` only reads `robot_description` off a topic (not a parameter), the controllers window's `robot_state_publisher`/`ros2_control_node` pair publishes/subscribes on a private `vla_controllers/robot_description` topic instead of the shared `<namespace>/robot_description` — otherwise the two publishers would race on the same topic name.
 
 The manual equivalents of each step are below.
 

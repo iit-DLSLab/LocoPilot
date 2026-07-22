@@ -1,8 +1,7 @@
-import ast
-import os
+import sys
 import tempfile
+from pathlib import Path
 
-import xacro
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -10,29 +9,13 @@ from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 
-# We run xacro on the agx_arm_moveit package's ros2_control URDF directly
-# instead of going through moveit_configs_utils/move_group -- the VLA stack
-# only needs the robot_description + ros2_control tags for the mock-hardware
-# controller_manager, not planning/rviz.
-_CONFIG_DIR = os.path.join(get_package_share_directory("agx_arm_moveit"), "config")
-_URDF_XACRO = os.path.join(_CONFIG_DIR, "agx_arm.urdf.xacro")
-_INITIAL_POSITIONS = os.path.join(_CONFIG_DIR, "initial_positions.yaml")
-
-
-def _build_robot_description(arm_type, effector_type, revo2_type, tcp_offset):
-    """Run xacro on the vendored URDF and return the {robot_description: xml} dict."""
-    doc = xacro.process_file(
-        _URDF_XACRO,
-        mappings={
-            "arm_type": arm_type,
-            "effector_type": effector_type,
-            "revo2_type": revo2_type,
-            "initial_positions_file": _INITIAL_POSITIONS,
-            "tcp_offset_xyz": f"{tcp_offset[0]} {tcp_offset[1]} {tcp_offset[2]}",
-            "tcp_offset_rpy": f"{tcp_offset[3]} {tcp_offset[4]} {tcp_offset[5]}",
-        },
-    )
-    return {"robot_description": doc.toxml()}
+# Reuse agx_arm_moveit's own robot_description builder (MoveItConfigsBuilder
+# over agx_arm.urdf.xacro) instead of re-deriving the xacro invocation here,
+# so the VLA stack's ros2_control_node gets byte-for-byte the same
+# robot_description as `ros2 launch agx_arm_ctrl start_single_agx_arm_moveit.launch.py`
+# (agx_arm_moveit/launch/demo.launch.py -> rsp.launch.py) produces.
+sys.path.insert(0, str(Path(get_package_share_directory("agx_arm_moveit")) / "launch"))
+from _moveit_config_builder import build_moveit_config  # noqa: E402
 
 
 def _build_ros2_controllers_file(arm_type, effector_type, namespace):
@@ -98,24 +81,43 @@ def _launch(context):
     namespace = LaunchConfiguration("namespace").perform(context)
     arm_type = LaunchConfiguration("arm_type").perform(context)
     effector_type = LaunchConfiguration("effector_type").perform(context)
-    revo2_type = LaunchConfiguration("revo2_type").perform(context)
-    tcp_offset = ast.literal_eval(LaunchConfiguration("tcp_offset").perform(context))
 
-    robot_description = _build_robot_description(
-        arm_type, effector_type, revo2_type, tcp_offset
-    )
+    # build_moveit_config() reads arm_type/effector_type/revo2_type/tcp_offset
+    # straight off the context -- this launch file declares those same-named
+    # arguments below, so it produces the identical robot_description
+    # demo.launch.py's rsp.launch.py builds.
+    robot_description = build_moveit_config(context).robot_description
     ros2_controllers_yaml = _build_ros2_controllers_file(
         arm_type, effector_type, namespace
+    )
+
+    # Jazzy's controller_manager no longer accepts robot_description as a
+    # parameter -- it only reads it off the `robot_description` topic. The
+    # arm-ctrl window's own robot_state_publisher already publishes on
+    # `<namespace>/robot_description` (a URDF with no <ros2_control> tag), so
+    # our robot_state_publisher/control_node pair is remapped onto a private
+    # topic name to avoid the two publishers colliding.
+    robot_description_topic = "vla_controllers/robot_description"
+
+    robot_state_publisher_node = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        parameters=[robot_description],
+        remappings=[("robot_description", robot_description_topic)],
+        output="screen",
     )
 
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, ros2_controllers_yaml],
+        parameters=[ros2_controllers_yaml],
         # The mock-hardware state the joint_state_broadcaster publishes on
         # `joint_states` is what the arm control node consumes as
         # control/joint_states to drive the real arm (same wiring as MoveIt).
-        remappings=[("joint_states", LaunchConfiguration("control_topic"))],
+        remappings=[
+            ("robot_description", robot_description_topic),
+            ("joint_states", LaunchConfiguration("control_topic")),
+        ],
         output="screen",
     )
 
@@ -135,6 +137,7 @@ def _launch(context):
         GroupAction(
             actions=[
                 PushRosNamespace(namespace),
+                robot_state_publisher_node,
                 control_node,
                 *[spawner(c) for c in controllers],
             ]

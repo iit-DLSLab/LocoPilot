@@ -64,15 +64,16 @@ build_ws() {
 
 # 1. Piper arm workspace, restricted to the teleop packages (+ agx_arm_moveit,
 # built for its config files only). rosdep runs with -r so unresolvable keys
-# do not abort the build; the skipped moveit/warehouse/rviz-integration keys
-# are agx_arm_moveit exec_depends for move_group/rviz/warehouse, none of which
-# the VLA stack launches on the robot -- only its config/ xacro files are used.
+# do not abort the build; the skipped keys are agx_arm_moveit exec_depends for
+# move_group/rviz/warehouse, none of which the VLA stack launches on the robot
+# -- only its config/ xacro files (via moveit_configs_utils, NOT skipped: the
+# VLA controllers launch imports it to build the robot_description) are used.
 (
     cd "$PIPER_WS"
     rosdep install \
         --from-paths src \
         --ignore-src -r -y --rosdistro jazzy \
-        --skip-keys "dls2_interface moveit_ros_perception moveit_ros_move_group moveit_ros_visualization moveit_ros_warehouse moveit_simple_controller_manager moveit_planners moveit_kinematics moveit_configs_utils warehouse_ros_mongo" \
+        --skip-keys "dls2_interface moveit_ros_perception moveit_ros_move_group moveit_ros_visualization moveit_ros_warehouse moveit_simple_controller_manager moveit_planners moveit_kinematics warehouse_ros_mongo" \
         || true
 )
 # piper_sdk (setup.py points package_dir outside the package tree) and
