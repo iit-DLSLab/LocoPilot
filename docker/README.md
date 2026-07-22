@@ -97,7 +97,7 @@ controller --/trajectory_generator, /arm_trajectory_generator-->  simulator
 
 ## 6. Physical robot deployment
 
-`attach.sh` already sets `RMW_IMPLEMENTATION=rmw_fastrtps_cpp`, sets `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET` (Jazzy's replacement for `ROS_LOCALHOST_ONLY`, which is unset), and pins Fast DDS's transport to `ROBOT_NET_IFACE`'s IP address via a generated `FASTRTPS_DEFAULT_PROFILES_FILE` (Fast DDS whitelists by IP, not interface name, unlike CycloneDDS). This matches the Go2's own native DDS stack — CycloneDDS is no longer used anywhere in this deployment. One attached terminal per process; keep the robot supported for the first test.
+`attach.sh` already sets `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp` and `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET` (Jazzy's replacement for `ROS_LOCALHOST_ONLY`, which is unset). Note: an earlier version of this deployment moved off CycloneDDS to Fast DDS after a confirmed `ros2 topic list` hang on the Go2's large native DDS graph (see §8) — CycloneDDS is back as the default as of this revision, so re-verify that behavior on real hardware before relying on it. The Fast DDS interface-pinning logic (`FASTRTPS_DEFAULT_PROFILES_FILE`, generated from `ROBOT_NET_IFACE`) in `dls-env` is now dead code under CycloneDDS and left in place only in case of a future rollback. One attached terminal per process; keep the robot supported for the first test.
 
 **Terminal 1 — Go2 HAL**
 ```bash
@@ -206,9 +206,9 @@ For any other arm package, wire it through `EXTRA_ROS_WORKSPACES` (`docker/.env`
 
 **`'localhost_only' is enabled` warning** — the shell inherited sim config. `unset ROS_LOCALHOST_ONLY ROS_STATIC_PEERS; export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET`, then relaunch (or just re-run `attach.sh`, which sets this correctly).
 
-**`ros2 topic list` hangs** — was slow under the old CycloneDDS setup on the Go2's large native DDS graph. Under Fast DDS (current default) this has been confirmed fast/clean on the real robot; if it still hangs, check for a stale `RMW_IMPLEMENTATION` in the shell first. Fallback: check known topics directly (see §6).
+**`ros2 topic list` hangs** — was slow under an earlier CycloneDDS setup on the Go2's large native DDS graph; switching to Fast DDS previously fixed it on the real robot. CycloneDDS is the default again as of this revision — if the hang reappears, check for a stale `RMW_IMPLEMENTATION` in the shell first, and fall back to Fast DDS (`RMW_IMPLEMENTATION=rmw_fastrtps_cpp`) if needed. Fallback for checking topics without listing: check known topics directly (see §6).
 
-**`Failed to parse type hash for topic ... USER_DATA '(null)'`** — seen under CycloneDDS; native Unitree DDS endpoints lack Jazzy type-hash metadata. Noisy but harmless, didn't block `/lowstate`, `/blind_state`, `/base_state`. Not observed under Fast DDS.
+**`Failed to parse type hash for topic ... USER_DATA '(null)'`** — seen previously under CycloneDDS; native Unitree DDS endpoints lack Jazzy type-hash metadata. Noisy but harmless, didn't block `/lowstate`, `/blind_state`, `/base_state`. Watch for a recurrence now that CycloneDDS is the default again.
 
 **`/lowstate` works but `/blind_state` doesn't** — the Go2 HAL subscription must use `rclcpp::SensorDataQoS()`. Already patched in the pinned `jazzy-deploy` submodule.
 

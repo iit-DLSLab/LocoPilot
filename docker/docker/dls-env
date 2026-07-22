@@ -40,7 +40,7 @@ if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
     unset _dls_ws _dls_extra_workspaces _dls_old_ifs
 fi
 
-export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}"
+export RMW_IMPLEMENTATION="${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 # Jazzy replaces ROS_LOCALHOST_ONLY with ROS_AUTOMATIC_DISCOVERY_RANGE
 # (OFF | LOCALHOST | SUBNET | SYSTEM_DEFAULT) + ROS_STATIC_PEERS. Robot-facing

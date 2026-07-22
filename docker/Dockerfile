@@ -9,7 +9,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+    RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
     ROS_DOMAIN_ID=0 \
     ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET \
     PIP_NO_CACHE_DIR=1 \
@@ -59,6 +59,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tmux \
     vim-tiny \
     ros-jazzy-rmw-fastrtps-cpp \
+    ros-jazzy-rmw-cyclonedds-cpp \
     ros-jazzy-rosidl-generator-dds-idl \
     ros-jazzy-message-filters \
     ros-jazzy-robot-state-publisher \

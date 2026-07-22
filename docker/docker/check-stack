@@ -39,7 +39,7 @@ PY
 
 if [[ -f "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash" ]]; then
     printf '\nROS packages:\n'
-    for pkg in rmw_fastrtps_cpp dls2_interface go2_hal state_estimator dls2_piper_bridge; do
+    for pkg in rmw_cyclonedds_cpp dls2_interface go2_hal state_estimator dls2_piper_bridge; do
         if ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
             printf '  [OK] %s -> %s\n' "$pkg" "$(ros2 pkg prefix "$pkg")"
         else

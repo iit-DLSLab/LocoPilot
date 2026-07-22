@@ -15,7 +15,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+    RMW_IMPLEMENTATION=rmw_cyclonedds_cpp \
     ROS_DOMAIN_ID=0 \
     ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET \
     PIP_NO_CACHE_DIR=1 \
@@ -54,6 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-scipy \
     python3-typing-extensions \
     ros-jazzy-rmw-fastrtps-cpp \
+    ros-jazzy-rmw-cyclonedds-cpp \
     ros-jazzy-robot-state-publisher \
     ros-jazzy-joint-state-publisher \
     ros-jazzy-joint-state-publisher-gui \
