@@ -89,4 +89,13 @@ EOF
     unset _dls_iface_ip _dls_fastdds_profile_file
 fi
 
+# CycloneDDS pins its interface by name (unlike Fast DDS's IP-based
+# interfaceWhiteList above), via a <NetworkInterface name=...> element in an
+# XML config passed through CYCLONEDDS_URI. Matches the pattern used by
+# unitree_ros2/setup.sh, parameterized on ROBOT_NET_IFACE instead of a
+# hardcoded interface name.
+if [[ -z "${CYCLONEDDS_URI:-}" && -n "${ROBOT_NET_IFACE:-}" ]]; then
+    export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"${ROBOT_NET_IFACE}\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
+fi
+
 unset -f _dls_source_if_present
