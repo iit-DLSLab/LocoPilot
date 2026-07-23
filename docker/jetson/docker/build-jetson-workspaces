@@ -12,6 +12,11 @@ set -eo pipefail
 source /opt/ros/jazzy/setup.bash
 source /opt/deploy_venv/bin/activate
 
+# The image's apt-get install layer removes /var/lib/apt/lists to keep the
+# image small (see Dockerfile), so rosdep's apt calls below have no package
+# index at container runtime until this refreshes it.
+apt-get update
+
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-/workspace/locoman_vla_deploy}"
 PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
 COLCON_JOBS="${COLCON_JOBS:-4}"
