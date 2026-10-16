@@ -26,7 +26,6 @@ WORLD_CAMERA_SERIAL="${WORLD_CAMERA_SERIAL:-}"
 
 for path in \
     "$ROBOT_WORKSPACE/$PIPER_DIR" \
-    "$ROBOT_WORKSPACE/dls_ros2_manipulation" \
     "$ROBOT_WORKSPACE/ros2_ws"; do
     if [[ ! -d "$path" ]]; then
         echo "Required repository directory not found: $path" >&2

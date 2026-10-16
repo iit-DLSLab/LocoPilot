@@ -8,9 +8,8 @@ Dockerized ROS 2 Jazzy deployment stack for Unitree Go2 locomotion and AgileX Pi
 | [`muse`](./muse) | Base-state estimation | `jazzy-deploy` |
 | [`unitree-ros2-dls`](./unitree-ros2-dls) | Go2 HAL, shared DLS ROS 2 messages | `jazzy-deploy` |
 | [`piper-ros2-dls`](./piper-ros2-dls) | AgileX Piper arm HAL | `main` |
-| [`dls_ros2_manipulation`](./dls_ros2_manipulation) | Haptic teleoperation + demo recorder/cameras, built via the top-level `ros2_ws` | `feature/p2p_haptic_teleoperation` @ `95f1493` (TODO: merge upstream) |
 
-`docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule.
+`docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule. So is `ros2_ws/src/haptic_teleoperation` (leader/follower haptic teleoperation + joy gripper control), vendored from `iit-DLSLab/dls_ros2_manipulation` @ `b03365e` (`feature/p2p_haptic_teleoperation`) and built in the top-level `ros2_ws`.
 
 > **Safety:** physical-robot commands move the legs and arm. Keep the robot supported, keep the e-stop ready, and verify state topics before enabling the policy.
 
@@ -51,7 +50,7 @@ ping -c 3 192.168.123.18
 ./build-workspaces.sh --clean   # first build; drop --clean for incremental rebuilds
 ```
 
-Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §6) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (dls_ros2_manipulation packages) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): below.
+Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §6) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (`haptic_teleoperation`) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): below.
 
 ```bash
 ./attach.sh              # open a container shell — every deploy terminal starts here
@@ -165,12 +164,12 @@ jetson/deploy-robot.sh   # follower: arm ctrl + PD+g + two RealSense cameras (ov
 ```
 
 Details:
-- `install-robot.sh` is idempotent: ssh key setup (`ssh-copy-id`, default password `123`) → clone/update this repo on the robot with only the `piper-ros2-dls` and `dls_ros2_manipulation` submodules → copy `.env` → `jetson-containers build ros:jazzy-ros-base` if the base image is missing → `jetson/build-image.sh` → `jetson/start.sh` → `build-jetson-workspaces` in the container. GitHub access from the robot uses ssh agent forwarding, so your laptop's key must be loaded (`ssh-add -l`).
-- The jetson image builds only the follower packages (`piper_sdk`, `agx_arm_msgs`, `agx_arm_description`, `agx_arm_ctrl`, `agx_arm_pd_g_controller`, plus the `dls_ros2_manipulation` packages) — no MoveIt or dls2 bridge. rviz2 is installed because `display.launch.py` hard-requires it; headless it simply exits while the arm nodes keep running.
+- `install-robot.sh` is idempotent: ssh key setup (`ssh-copy-id`, default password `123`) → clone/update this repo on the robot with only the `piper-ros2-dls` submodule → copy `.env` → `jetson-containers build ros:jazzy-ros-base` if the base image is missing → `jetson/build-image.sh` → `jetson/start.sh` → `build-jetson-workspaces` in the container. GitHub access from the robot uses ssh agent forwarding, so your laptop's key must be loaded (`ssh-add -l`).
+- The jetson image builds only the follower packages (`piper_sdk`, `agx_arm_msgs`, `agx_arm_description`, `agx_arm_ctrl`, `agx_arm_pd_g_controller`, plus `haptic_teleoperation`) — no MoveIt or dls2 bridge. rviz2 is installed because `display.launch.py` hard-requires it; headless it simply exits while the arm nodes keep running.
 - CAN activation runs inside the privileged container (`docker exec <name> can-activate`) on both sides — no host `sudo`. Re-run it (or just re-run the deploy script) after power-cycling an arm.
 - `teleop-session <leader|robot>` (in both images) creates the tmux session; re-running attaches to it. Kill everything with `C-b : kill-session`, or `jetson/stop.sh` / `./stop.sh`.
 - Camera serial numbers come from `GRIPPER_CAMERA_SERIAL` / `WORLD_CAMERA_SERIAL` in `jetson/.env` (TODO: fill in; find them with `rs-enumerate-devices -s` on the robot). They are baked into the container environment — after changing them run `jetson/remove-container.sh` then `jetson/start.sh` (or re-run `install-robot.sh`).
-- `haptic_teleoperation` and `manipulation_demo_recorder` come from `dls_ros2_manipulation`, pinned to `feature/p2p_haptic_teleoperation` @ `95f1493` and built through the top-level `ros2_ws` (its `src/dls_ros2_manipulation` symlink keeps colcon artifacts out of the submodule). TODO: merge that branch into `main` upstream and re-pin.
+- `haptic_teleoperation` is vendored in `ros2_ws/src` (from `dls_ros2_manipulation` @ `b03365e`) and built through the top-level `ros2_ws`.
 
 The manual equivalents follow.
 

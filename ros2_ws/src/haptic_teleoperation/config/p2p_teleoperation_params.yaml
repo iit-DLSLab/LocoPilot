@@ -1,0 +1,57 @@
+p2p_teleoperation:
+  ros__parameters:
+    leader:
+      state_topic: /leader/feedback/joint_states
+      control_topic: /leader/control/move_mit_joint_states
+      homing_control_topic: /leader/control/move_j
+      robot_description_topic: /leader/robot_description
+      external_torque_topic: /leader/feedback/external_torque
+    follower:
+      state_topic: /follower/feedback/joint_states
+      control_topic: /follower/control/move_mit_joint_states
+      homing_control_topic: /follower/control/move_j
+      robot_description_topic: /follower/robot_description
+      external_torque_topic: /follower/feedback/external_torque
+    coupled_joint_names:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+    coupling:
+      stiffness:
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+      damping:
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+    force_reflection:
+      enable: true
+      gain:
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+        - 1.0
+    start_configuration:
+      - 0.0
+      - 1.0
+      - -0.77
+      - -0.045
+      - 1.486
+      - 0.0
+    control_rate_hz: 200.0
+    state_timeout_sec: 0.2
+    homing:
+      duration_sec: 5.0
+      position_tolerance: 0.05

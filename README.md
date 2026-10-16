@@ -8,9 +8,8 @@ Dockerized ROS 2 Jazzy deployment stack for Unitree Go2 locomotion and AgileX Pi
 | [`muse`](./muse) | Base-state estimation | `jazzy-deploy` |
 | [`unitree-ros2-dls`](./unitree-ros2-dls) | Go2 HAL, shared DLS ROS 2 messages | `jazzy-deploy` |
 | [`piper-ros2-dls`](./piper-ros2-dls) | AgileX Piper arm HAL | `main` |
-| [`dls_ros2_manipulation`](./dls_ros2_manipulation) | Haptic teleoperation + demo recorder/cameras, built via the top-level `ros2_ws` | `feature/p2p_haptic_teleoperation` @ `95f1493` (TODO: merge upstream) |
 
-`docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule.
+`docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule. So is `ros2_ws/src/haptic_teleoperation` (leader/follower haptic teleoperation + joy gripper control), vendored from `iit-DLSLab/dls_ros2_manipulation` @ `b03365e` (`feature/p2p_haptic_teleoperation`) and built in the top-level `ros2_ws`.
 
 > **Safety:** physical-robot commands move the legs and arm. Keep the robot supported, keep the e-stop ready, and verify state topics before enabling the policy.
 
@@ -75,7 +74,7 @@ cd docker
 ./build-workspaces.sh --clean   # first build; drop --clean for incremental rebuilds
 ```
 
-Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §9) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (dls_ros2_manipulation packages) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): `docker/README.md`.
+Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §9) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (`haptic_teleoperation`) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): `docker/README.md`.
 
 ```bash
 ./attach.sh              # open a container shell — every deploy terminal starts here
@@ -359,7 +358,7 @@ docker/jetson/deploy-robot.sh   # follower stack on the Jetson (handles ssh)
 docker/deploy-leader.sh         # leader stack on this laptop
 ```
 
-Both wrap `teleop-session <leader|robot>` inside the respective container; re-running re-attaches to the existing session. CAN activation now runs *inside* the privileged container (`can-activate`), so no host `sudo` is needed on either side. `haptic_teleoperation` comes from the `dls_ros2_manipulation` submodule, pinned to `feature/p2p_haptic_teleoperation` (`95f1493`) and built into the top-level `ros2_ws` (TODO: merge that branch into `main` upstream and re-pin).
+Both wrap `teleop-session <leader|robot>` inside the respective container; re-running re-attaches to the existing session. CAN activation now runs *inside* the privileged container (`can-activate`), so no host `sudo` is needed on either side. `haptic_teleoperation` is vendored in `ros2_ws/src` and built into the top-level `ros2_ws`.
 
 ### One-command VLA deploy
 

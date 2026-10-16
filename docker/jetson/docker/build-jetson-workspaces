@@ -37,10 +37,10 @@ PIPER_PACKAGES=(
 
 for path in \
     "$PIPER_WS/src" \
-    "$MANIP_WS/src/dls_ros2_manipulation"; do
+    "$MANIP_WS/src/haptic_teleoperation"; do
     if [[ ! -e "$path" ]]; then
         echo "Required path not found: $path" >&2
-        echo "Clone the repo with the piper-ros2-dls and dls_ros2_manipulation submodules initialized." >&2
+        echo "Clone the repo with the piper-ros2-dls submodule initialized." >&2
         exit 1
     fi
 done
@@ -96,9 +96,8 @@ build_ws "$PIPER_WS" \
     --packages-skip piper_sdk agx_arm_pd_g_controller
 source "$PIPER_WS/install/setup.bash"
 
-# 2. DLS manipulation workspace (manipulation_demo_recorder / haptic
-# teleoperation packages, discovered through ros2_ws/src symlink). Plain
-# build: these packages use generate_parameter_library_py too.
+# 2. Top-level workspace (haptic_teleoperation, vendored in ros2_ws/src).
+# Plain build: it uses generate_parameter_library_py too.
 (
     cd "$MANIP_WS"
     rosdep install \

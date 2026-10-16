@@ -164,13 +164,10 @@ else
     echo "Piper workspace not found, skipping: $PIPER_WS/src" >&2
 fi
 
-# 5. DLS manipulation workspace (haptic_teleoperation, manipulation_demo_recorder).
-# The dls_ros2_manipulation submodule has no ros2_ws of its own; its packages
-# are discovered through the committed symlink ros2_ws/src/dls_ros2_manipulation
-# so colcon artifacts land in the top-level ros2_ws instead of dirtying the
-# submodule working tree. Both packages use generate_parameter_library_py, so
-# they get a plain (non-symlink) build — see the agx_arm_pd_g_controller note.
-if [[ -d "$MANIP_WS/src/dls_ros2_manipulation" ]]; then
+# 5. Top-level workspace (haptic_teleoperation, vendored in ros2_ws/src).
+# haptic_teleoperation uses generate_parameter_library_py, so it gets a plain
+# (non-symlink) build — see the agx_arm_pd_g_controller note.
+if [[ -d "$MANIP_WS/src/haptic_teleoperation" ]]; then
     (
         cd "$MANIP_WS"
         rosdep install \
@@ -182,7 +179,7 @@ if [[ -d "$MANIP_WS/src/dls_ros2_manipulation" ]]; then
     )
     source "$MANIP_WS/install/setup.bash"
 else
-    echo "Manipulation workspace not found, skipping: $MANIP_WS/src/dls_ros2_manipulation" >&2
+    echo "Manipulation workspace not found, skipping: $MANIP_WS/src/haptic_teleoperation" >&2
 fi
 
 # Optional additional Jazzy workspaces, such as the arm teleoperation workspace.

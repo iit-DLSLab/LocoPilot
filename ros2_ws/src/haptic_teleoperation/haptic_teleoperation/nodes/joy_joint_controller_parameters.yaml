@@ -1,0 +1,34 @@
+joy_joint_controller:
+  input_topic:
+    type: string
+    default_value: "/joy"
+    description: "Joystick input topic (sensor_msgs/msg/Joy)."
+  output_topic:
+    type: string
+    default_value: "/joint_reference"
+    description: "Discrete joint-space reference topic (sensor_msgs/msg/JointState)."
+  joints:
+    type: string_array
+    description: "Ordered names of the joints controlled from joystick buttons. Required, must be set via YAML."
+  mappings:
+    __map_joints:
+      button_index:
+        type: int
+        default_value: 0
+        description: "Index of the Joy button controlling this joint."
+        validation:
+          gt_eq<>: [0]
+      mode:
+        type: string
+        default_value: "hold"
+        description: "Button behavior: hold or trigger."
+        validation:
+          one_of<>: [["hold", "trigger"]]
+      low_value:
+        type: double
+        default_value: 0.0
+        description: "Joint reference emitted in the LOW state."
+      high_value:
+        type: double
+        default_value: 1.0
+        description: "Joint reference emitted in the HIGH state."

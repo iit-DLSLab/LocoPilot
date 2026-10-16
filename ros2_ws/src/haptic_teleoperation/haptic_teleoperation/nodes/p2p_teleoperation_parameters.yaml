@@ -1,0 +1,94 @@
+p2p_teleoperation:
+  leader:
+    state_topic:
+      type: string
+      default_value: "/leader/joint_states"
+      description: "Leader arm joint state topic (sensor_msgs/JointState)."
+    control_topic:
+      type: string
+      default_value: "/leader/joint_commands"
+      description: "Leader arm joint command topic (sensor_msgs/JointState)."
+    homing_control_topic:
+      type: string
+      default_value: ""
+      description: "Optional leader arm joint command topic used while homing (sensor_msgs/JointState). Falls back to control_topic when unset."
+    robot_description_topic:
+      type: string
+      default_value: "/leader/robot_description"
+      description: "Leader arm robot description topic (std_msgs/String)."
+    external_torque_topic:
+      type: string
+      default_value: "/leader/feedback/external_torque"
+      description: "Leader arm external torque estimate topic (sensor_msgs/JointState, effort field), used by force_reflection."
+  follower:
+    state_topic:
+      type: string
+      default_value: "/follower/joint_states"
+      description: "Follower arm joint state topic (sensor_msgs/JointState)."
+    control_topic:
+      type: string
+      default_value: "/follower/joint_commands"
+      description: "Follower arm joint command topic (sensor_msgs/JointState)."
+    homing_control_topic:
+      type: string
+      default_value: ""
+      description: "Optional follower arm joint command topic used while homing (sensor_msgs/JointState). Falls back to control_topic when unset."
+    robot_description_topic:
+      type: string
+      default_value: "/follower/robot_description"
+      description: "Follower arm robot description topic (std_msgs/String)."
+    external_torque_topic:
+      type: string
+      default_value: "/follower/feedback/external_torque"
+      description: "Follower arm external torque estimate topic (sensor_msgs/JointState, effort field), used by force_reflection."
+  coupled_joint_names:
+    type: string_array
+    default_value: ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+    description: "Joints coupled between leader and follower."
+  coupling:
+    stiffness:
+      type: double_array
+      default_value: [50.0, 50.0, 50.0, 50.0, 50.0, 50.0]
+      description: "Per-joint coupling stiffness in N*m/rad, ordered like coupled_joint_names."
+    damping:
+      type: double_array
+      default_value: [2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
+      description: "Per-joint coupling damping in N*m*s/rad, ordered like coupled_joint_names."
+  force_reflection:
+    enable:
+      type: bool
+      default_value: false
+      description: "Cross-feed each arm's external torque estimate to the other arm as a force-reflection feedforward on control_topic's effort field, instead of the position-position coupling spring-damper effort. Position/velocity channels (control_topic's position/velocity fields) are unaffected either way."
+    gain:
+      type: double_array
+      default_value: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+      description: "Per-joint force-reflection gain applied to the other arm's external torque estimate, ordered like coupled_joint_names. Sign/magnitude must be verified on the bench (push the follower by hand and confirm the leader resists in the intuitive direction)."
+  start_configuration:
+    type: double_array
+    default_value: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    description: "Shared start joint positions, ordered like coupled_joint_names."
+  control_rate_hz:
+    type: double
+    default_value: 200.0
+    description: "Rate of the coupling control loop in Hz."
+    validation:
+      gt<>: [0.0]
+  state_timeout_sec:
+    type: double
+    default_value: 0.2
+    description: "Maximum joint state age before coupling efforts are zeroed."
+    validation:
+      gt<>: [0.0]
+  homing:
+    duration_sec:
+      type: double
+      default_value: 5.0
+      description: "Duration of the motion to the start configuration."
+      validation:
+        gt<>: [0.0]
+    position_tolerance:
+      type: double
+      default_value: 0.05
+      description: "Per-joint tolerance in rad to consider homing complete."
+      validation:
+        gt<>: [0.0]

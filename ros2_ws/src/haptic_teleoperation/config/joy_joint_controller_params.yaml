@@ -1,0 +1,11 @@
+joy_joint_controller:
+  ros__parameters:
+    input_topic: /joycon
+    output_topic: /follower/control/joint_states
+    joints: [gripper]
+    mappings:
+      gripper:
+        button_index: 8
+        mode: hold
+        low_value: 0.1
+        high_value: 0.0

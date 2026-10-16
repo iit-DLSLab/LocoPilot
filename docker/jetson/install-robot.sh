@@ -11,7 +11,7 @@ set -euo pipefail
 # What it does (idempotent — safe to re-run):
 #   1. Installs your ssh key on the robot (first run asks for the password once).
 #   2. Clones/updates this repo on the robot with only the submodules the
-#      robot needs (piper-ros2-dls, dls_ros2_manipulation). GitHub access from
+#      robot needs (piper-ros2-dls). GitHub access from
 #      the robot uses ssh agent forwarding (-A), so your laptop's key is used.
 #   3. Copies docker/jetson/.env to the robot.
 #   4. Builds the jetson-containers ros:jazzy-ros-base base image if missing.
@@ -81,8 +81,8 @@ else
     git -C "$ROBOT_WORKSPACE" pull --ff-only origin "$REPO_BRANCH"
 fi
 # Only the submodules the robot needs; the sim/locomotion ones stay on the laptop.
-git -C "$ROBOT_WORKSPACE" submodule sync piper-ros2-dls dls_ros2_manipulation
-git -C "$ROBOT_WORKSPACE" submodule update --init --recursive piper-ros2-dls dls_ros2_manipulation
+git -C "$ROBOT_WORKSPACE" submodule sync piper-ros2-dls
+git -C "$ROBOT_WORKSPACE" submodule update --init --recursive piper-ros2-dls
 REMOTE_CLONE
 
 echo "==> [3/5] copy .env to the robot"
