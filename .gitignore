@@ -2,7 +2,7 @@
 docker/.env
 docker/jetson/.env
 
-# Top-level colcon workspace (dls_ros2_manipulation build artifacts)
+# Top-level colcon workspace (haptic_teleoperation build artifacts)
 ros2_ws/build/
 ros2_ws/install/
 ros2_ws/log/
@@ -20,3 +20,7 @@ ros2_ws/log/
 # Python
 __pycache__/
 *.pyc
+
+# Recorded ROS 2 bags
+go2piper_pickplace_*/
+*.mcap
