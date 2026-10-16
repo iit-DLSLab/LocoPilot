@@ -65,21 +65,25 @@ def generate_launch_description():
         os.path.dirname(os.path.abspath(__file__)),
         'gripper_camera_extra_params.yaml',
     )
+    world_extra_params = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'world_camera_extra_params.yaml',
+    )
 
     # Launch configurations set by one include leak into the next
     # (includes share the launch context), so every argument that differs
     # between the cameras must be set explicitly in both.
+    # QoS is best-effort for all streamed topics -- set via config_file (see
+    # gripper/world_camera_extra_params.yaml), not launch arguments: rs_launch.py
+    # silently drops launch arguments outside its declared configurable_parameters
+    # list (e.g. 'rgb_camera.color_qos'), so they never reach the node.
     common_arguments = [
         ('camera_name', 'realsense_camera_node'),
         ('enable_color', 'true'),
         ('enable_depth', 'true'),
         ('enable_sync', 'true'),
-        ('rgb_camera.color_qos', 'SENSOR_DATA'),
-        ('rgb_camera.color_info_qos', 'SENSOR_DATA'),
-        ('depth_module.depth_qos', 'SENSOR_DATA'),
-        ('depth_module.depth_info_qos', 'SENSOR_DATA'),
         ('enable_rgbd', 'true'),
-        ('align_depth.enable', 'true'),
+        ('align_depth.enable', 'false'),
     ]
 
     gripper_camera = IncludeLaunchDescription(
@@ -106,7 +110,7 @@ def generate_launch_description():
             ('rgb_camera.enable_auto_exposure', 'true'),
             ('depth_module.color_profile', world_profile),
             ('depth_module.depth_profile', world_profile),
-            ('config_file', "''"),
+            ('config_file', world_extra_params),
         ],
     )
 
