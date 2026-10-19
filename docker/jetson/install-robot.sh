@@ -10,9 +10,8 @@ set -euo pipefail
 #
 # What it does (idempotent — safe to re-run):
 #   1. Installs your ssh key on the robot (first run asks for the password once).
-#   2. Clones/updates this repo on the robot with only the submodules the
-#      robot needs (piper-ros2-dls). GitHub access from
-#      the robot uses ssh agent forwarding (-A), so your laptop's key is used.
+#   2. Clones/updates this repo on the robot with only the piper-ros2-dls
+#      submodule. Over ssh URLs, GitHub access uses agent forwarding (-A).
 #   3. Copies docker/jetson/.env to the robot.
 #   4. Builds the jetson-containers ros:jazzy-ros-base base image if missing.
 #   5. Builds the locoman-vla-jetson image, starts the container, and builds
@@ -43,9 +42,8 @@ REMOTE="$ROBOT_USER@$ROBOT_HOST"
 REPO_URL="$(git -C "$SCRIPT_DIR" remote get-url origin)"
 REPO_BRANCH="$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)"
 
-# The robot clones from origin, so it can only ever receive what has been
-# pushed. Refuse to install from a laptop checkout that origin doesn't have —
-# that silently deploys stale code (wrong submodule pins, missing scripts).
+# The robot clones from origin, so refuse to install from a checkout that
+# has not been pushed.
 echo "==> [0/5] check that origin/$REPO_BRANCH matches this checkout"
 git -C "$SCRIPT_DIR" fetch origin "$REPO_BRANCH"
 LOCAL_HEAD="$(git -C "$SCRIPT_DIR" rev-parse HEAD)"

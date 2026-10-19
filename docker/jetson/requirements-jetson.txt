@@ -1,6 +1,5 @@
-# Python dependencies for the Jetson (robot-side) arm teleoperation image.
-# Minimal subset of ../requirements-deploy.txt: only what the Piper arm
-# controller, gravity-compensated PD controller, and demo recorder need.
+# Python dependencies for the robot-side (Jetson) image: the subset of
+# ../requirements-deploy.txt needed by the Piper arm controllers.
 numpy<2
 scipy
 PyYAML

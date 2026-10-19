@@ -90,9 +90,8 @@ rosdep install \
 build_ws "$UNITREE_DLS_WS"
 source "$UNITREE_DLS_WS/install/setup.bash"
 
-# 3. MUSE proprioceptive state estimator. Its local copies of unitree_go and
-# dls2_interface are ignored in favor of the versions sourced above. Point-LIO
-# is intentionally omitted from this deployment image.
+# 3. MUSE state estimator. Its copies of unitree_go and dls2_interface are
+# ignored in favor of the versions built above; Point-LIO is not used.
 mapfile -t MUSE_PACKAGE_PATHS < <(
     cd "$MUSE_WS"
     colcon list \
@@ -123,35 +122,25 @@ if [[ ! -e "$CONTROLLER_MSG_WS/install" ]]; then
     ln -s "$UNITREE_DLS_WS/install" "$CONTROLLER_MSG_WS/install"
 fi
 
-# 4. AgileX Piper arm workspace. Its bundled dls2_interface copy is a stale
-# stub (missing BaseState/BlindState/etc.) kept only so the package.xml
-# dependency resolves in isolation; it must never be built or sourced, or it
-# will shadow the canonical dls2_interface installed in step 2 and reproduce
-# the exact type-hash/message-loss failures documented under "Common issues".
+# 4. AgileX Piper arm workspace. Its bundled dls2_interface is an incomplete
+# stub; building it would shadow the canonical package from step 2.
 if [[ -d "$PIPER_WS/src" ]]; then
     (
         cd "$PIPER_WS"
         # moveit_ros_perception and warehouse_ros_mongo are exec_depends of
-        # agx_arm_moveit, needed only for the optional "ROS 2 HAL + MoveIt"
-        # control path documented in piper-ros2-dls/README.md. This image
-        # uses the DLS2 HAL path (run-piper-hal / piper_hal.py) instead, and
-        # at least moveit_ros_perception has no ros-jazzy apt package yet.
+        # agx_arm_moveit that this stack never launches (and
+        # moveit_ros_perception has no Jazzy apt package).
         rosdep install \
             --from-paths src \
             --ignore-src -r -y --rosdistro jazzy \
             --skip-keys "dls2_interface moveit_ros_perception warehouse_ros_mongo"
     )
-    # Two package groups here cannot use --symlink-install:
-    #   - piper_sdk: its setup.py points package_dir outside the package tree
-    #     (at the pyAgxArm submodule via a relative "../../../pyAgxArm"),
-    #     breaking ament_python's symlink path resolution ("Can't get a
-    #     consistent path to setup script from installation directory").
-    #   - agx_arm_pd_g_controller: generate_parameter_library_py generates its
-    #     *_parameters.py module while setup.py runs, after the symlink farm
-    #     was created, so a symlink install misses the module and the node
-    #     dies at import time (ModuleNotFoundError: ..._parameters).
-    # Build both as plain (non-symlink) installs first, then symlink-install
-    # the rest.
+    # Two packages cannot use --symlink-install:
+    #   - piper_sdk: its setup.py points package_dir outside the package
+    #     tree (at the pyAgxArm submodule).
+    #   - agx_arm_pd_g_controller: generate_parameter_library_py writes its
+    #     *_parameters.py module during setup.py, after the symlinks exist.
+    # Build both as plain installs first, then symlink-install the rest.
     (
         cd "$PIPER_WS"
         python3 -m colcon build --packages-select piper_sdk agx_arm_pd_g_controller \
@@ -164,9 +153,8 @@ else
     echo "Piper workspace not found, skipping: $PIPER_WS/src" >&2
 fi
 
-# 5. Top-level workspace (haptic_teleoperation, vendored in ros2_ws/src).
-# haptic_teleoperation uses generate_parameter_library_py, so it gets a plain
-# (non-symlink) build — see the agx_arm_pd_g_controller note.
+# 5. Top-level workspace (haptic_teleoperation). Plain build, for the same
+# generate_parameter_library_py reason as agx_arm_pd_g_controller.
 if [[ -d "$MANIP_WS/src/haptic_teleoperation" ]]; then
     (
         cd "$MANIP_WS"
@@ -182,7 +170,7 @@ else
     echo "Manipulation workspace not found, skipping: $MANIP_WS/src/haptic_teleoperation" >&2
 fi
 
-# Optional additional Jazzy workspaces, such as the arm teleoperation workspace.
+# Optional additional Jazzy workspaces.
 if [[ -n "${EXTRA_ROS_WORKSPACES:-}" ]]; then
     old_ifs="$IFS"
     IFS=':' read -r -a extra_workspaces <<< "$EXTRA_ROS_WORKSPACES"

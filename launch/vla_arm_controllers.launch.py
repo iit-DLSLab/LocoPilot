@@ -1,3 +1,12 @@
+"""Arm trajectory interface for policy deployment.
+
+Starts a ros2_control_node with mock hardware and joint trajectory controllers
+(/arm_controller, /gripper_controller) under the follower namespace. A policy
+sends joint-position references to these controllers; they interpolate them,
+and the joint_state_broadcaster output is remapped onto the topic the arm
+control node forwards to the real arm.
+"""
+
 import sys
 import tempfile
 from pathlib import Path
@@ -9,11 +18,8 @@ from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, PushRosNamespace, SetRemap
 
-# Reuse agx_arm_moveit's own robot_description builder (MoveItConfigsBuilder
-# over agx_arm.urdf.xacro) instead of re-deriving the xacro invocation here,
-# so the VLA stack's ros2_control_node gets byte-for-byte the same
-# robot_description as `ros2 launch agx_arm_ctrl start_single_agx_arm_moveit.launch.py`
-# (agx_arm_moveit/launch/demo.launch.py -> rsp.launch.py) produces.
+# Reuse agx_arm_moveit's robot_description builder so the controllers see the
+# same URDF as the agx_arm_moveit launch files.
 sys.path.insert(0, str(Path(get_package_share_directory("agx_arm_moveit")) / "launch"))
 from _moveit_config_builder import build_moveit_config  # noqa: E402
 
@@ -21,11 +27,9 @@ from _moveit_config_builder import build_moveit_config  # noqa: E402
 def _build_ros2_controllers_file(arm_type, effector_type, namespace):
     """Write a ros2_controllers config to a temp YAML and return its path.
 
-    Same controller definitions as agx_arm_moveit/config/ros2_controllers.yaml
-    (and demo.launch.py), restricted to the two JTCs the VLA deployment drives
-    -- /arm_controller and /gripper_controller -- plus the
-    joint_state_broadcaster that publishes the mock-hardware state the arm
-    control node forwards to the real arm.
+    Same controller definitions as agx_arm_moveit/config/ros2_controllers.yaml,
+    restricted to /arm_controller, /gripper_controller and the
+    joint_state_broadcaster.
     """
     arm_joints = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
     if arm_type == "nero":
@@ -82,21 +86,16 @@ def _launch(context):
     arm_type = LaunchConfiguration("arm_type").perform(context)
     effector_type = LaunchConfiguration("effector_type").perform(context)
 
-    # build_moveit_config() reads arm_type/effector_type/revo2_type/tcp_offset
-    # straight off the context -- this launch file declares those same-named
-    # arguments below, so it produces the identical robot_description
-    # demo.launch.py's rsp.launch.py builds.
+    # build_moveit_config() reads arm_type, effector_type, revo2_type and
+    # tcp_offset from the launch context; they are declared below.
     robot_description = build_moveit_config(context).robot_description
     ros2_controllers_yaml = _build_ros2_controllers_file(
         arm_type, effector_type, namespace
     )
 
-    # Jazzy's controller_manager no longer accepts robot_description as a
-    # parameter -- it only reads it off the `robot_description` topic. The
-    # arm-ctrl window's own robot_state_publisher already publishes on
-    # `<namespace>/robot_description` (a URDF with no <ros2_control> tag), so
-    # our robot_state_publisher/control_node pair is remapped onto a private
-    # topic name to avoid the two publishers colliding.
+    # Jazzy's controller_manager reads robot_description from a topic. The
+    # arm control launch already publishes <namespace>/robot_description
+    # without a <ros2_control> tag, so this pair uses a separate topic.
     robot_description_topic = "vla_controllers/robot_description"
 
     robot_state_publisher_node = Node(
@@ -111,9 +110,7 @@ def _launch(context):
         package="controller_manager",
         executable="ros2_control_node",
         parameters=[ros2_controllers_yaml],
-        # The mock-hardware state the joint_state_broadcaster publishes on
-        # `joint_states` is what the arm control node consumes as
-        # control/joint_states to drive the real arm (same wiring as MoveIt).
+        # The arm control node forwards control/joint_states to the arm.
         remappings=[
             ("robot_description", robot_description_topic),
             ("joint_states", LaunchConfiguration("control_topic")),

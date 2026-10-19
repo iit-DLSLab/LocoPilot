@@ -7,11 +7,10 @@ two mutually exclusive effort channels selected by force_reflection.enable:
 - disabled (default): the P-P coupling effort
   tau = K (q_other - q_self) + D (dq_other - dq_self);
 - enabled: force_reflection.gain * (other arm's external torque estimate),
-  cross-fed from each side's own gravity-model-based estimator instead of
-  being derived from position error. This decouples how fast an arm tracks
-  its reference (still governed by the position/velocity channels and the
-  receiving side's own local controller) from how strongly contact is felt,
-  which the pure position-error-based effort above cannot do.
+  published by each arm's own controller instead of being derived from
+  position error. Tracking is then governed by the position/velocity
+  channels and the receiving arm's local controller, independently of how
+  strongly contact is felt.
 
 After validating both robot descriptions, both arms are homed to a shared
 start configuration before either effort channel is applied.

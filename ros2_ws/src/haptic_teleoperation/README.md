@@ -6,8 +6,9 @@ joint references.
 ## Nodes
 
 - `joy_joint_controller` maps joystick buttons to LOW/HIGH joint positions.
-- `p2p_teleoperation` couples two kinematically identical arms using a
-  position-position bilateral control architecture.
+- `p2p_teleoperation` couples two kinematically identical arms in joint
+  space, with either a position-position spring-damper coupling or force
+  reflection of an external torque estimate.
 
 ## Joystick joint controller
 
@@ -84,7 +85,26 @@ The efforts are equal and opposite, allowing the operator to feel the
 follower's tracking error. Each published `sensor_msgs/msg/JointState` contains:
 
 - `position` and `velocity`: the other arm's tracked motion.
-- `effort`: the spring-damper coupling effort.
+- `effort`: the spring-damper coupling effort, or the reflected torque when
+  force reflection is enabled.
+
+### Force reflection
+
+With `force_reflection.enable: true` (the shipped configuration), the effort
+sent to each arm is the other arm's external joint torque estimate scaled by
+`force_reflection.gain`, instead of the spring-damper term:
+
+```text
+tau_leader   = Lambda * tau_ext_follower
+tau_follower = Lambda * tau_ext_leader
+```
+
+The estimates are read from `leader.external_torque_topic` and
+`follower.external_torque_topic` (`sensor_msgs/msg/JointState`, `effort`
+field). On the Piper arms they are published by `agx_arm_pd_g_controller`'s
+momentum observer. Tracking is unchanged: each arm's local controller still
+follows the other arm's position and velocity. A stale estimate is replaced by
+zero effort.
 
 ### Startup sequence
 
@@ -127,8 +147,10 @@ and the runtime configuration is
 | `leader.control_topic`, `follower.control_topic` | Joint command topics. |
 | `leader.homing_control_topic`, `follower.homing_control_topic` | Optional command topics used only during homing; an empty value falls back to `control_topic`. |
 | `leader.robot_description_topic`, `follower.robot_description_topic` | URDF topics using transient-local durability. |
+| `leader.external_torque_topic`, `follower.external_torque_topic` | External torque estimates used by force reflection. |
 | `coupled_joint_names` | Ordered joints coupled between the arms. |
 | `coupling.stiffness`, `coupling.damping` | Per-joint spring-damper gains. |
+| `force_reflection.enable`, `force_reflection.gain` | Select force reflection and its per-joint gain. |
 | `start_configuration` | Shared initial joint positions. |
 | `control_rate_hz` | Coupling control-loop rate. |
 | `state_timeout_sec` | Maximum accepted joint-state age. |

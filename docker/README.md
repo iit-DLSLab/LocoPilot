@@ -1,246 +1,104 @@
-# Locomanipulation VLA Deployment
+# Docker images
 
-Dockerized ROS 2 Jazzy deployment stack for Unitree Go2 locomotion and AgileX Piper arm teleoperation.
+Two images run the stack described in the [main README](../README.md):
 
-| Submodule | Role | Pinned to |
-|---|---|---|
-| [`locomanipulation-teleop-isaaclab`](./locomanipulation-teleop-isaaclab) | RL policy, MuJoCo sim, ROS 2 controller/joystick | `jazzy-deploy` |
-| [`muse`](./muse) | Base-state estimation | `jazzy-deploy` |
-| [`unitree-ros2-dls`](./unitree-ros2-dls) | Go2 HAL, shared DLS ROS 2 messages | `jazzy-deploy` |
-| [`piper-ros2-dls`](./piper-ros2-dls) | AgileX Piper arm HAL | `main` |
+| Image | Where | Base | Contents |
+|---|---|---|---|
+| `locoman-vla-jazzy` (this directory) | Workstation (x86_64) | `osrf/ros:jazzy-desktop` | Go2 HAL, MUSE, locomotion controller and simulator, Piper arm stack, `haptic_teleoperation` |
+| `locoman-vla-jetson` ([`jetson/`](jetson/)) | Go2 Jetson (arm64) | `ros:jazzy-ros-base` from jetson-containers | Follower Piper arm stack, `haptic_teleoperation`, RealSense cameras, trajectory controllers for policy deployment |
 
-`docker/` (Dockerfile + helper scripts) is tracked directly in this repo, not a submodule. So is `ros2_ws/src/haptic_teleoperation` (leader/follower haptic teleoperation + joy gripper control), vendored from `iit-DLSLab/dls_ros2_manipulation` @ `b03365e` (`feature/p2p_haptic_teleoperation`) and built in the top-level `ros2_ws`.
+Both containers run privileged with host networking. The repository is mounted at `/workspace/locoman_vla_deploy`, so workspaces are built from the mounted sources and persist across container restarts.
 
-> **Safety:** physical-robot commands move the legs and arm. Keep the robot supported, keep the e-stop ready, and verify state topics before enabling the policy.
+## Host scripts
 
-## 1. Clone
+Workstation (`docker/`):
 
-```bash
-git clone --recurse-submodules https://github.com/iit-DLSLab/locoman_vla_deploy.git
-cd locoman_vla_deploy
-```
-
-Existing clone: `git submodule sync --recursive && git submodule update --init --recursive` — this also initializes nested submodules (e.g. `unitree-ros2-dls/unitree_ros2`). No manual branch switching is needed inside any submodule.
-
-## 2. Configure Docker
-
-```bash
-cd docker
-cp .env.example .env
-```
-
-Set the host interface connected to the Unitree/robot network:
-
-```dotenv
-ROBOT_NET_IFACE=enp98s0   # find with: ip -br addr
-```
-
-Sanity-check reachability before going further:
-
-```bash
-ip route get 192.168.123.18   # Go2 default IP
-ping -c 3 192.168.123.18
-```
-
-## 3. Build and start the container
-
-```bash
-./build-image.sh
-./start.sh
-./build-workspaces.sh --clean   # first build; drop --clean for incremental rebuilds
-```
-
-Build order: Unitree SDK workspace (`unitree_ros2/cyclonedds_ws` — messages/IDL only; the folder name is inherited from upstream and does not dictate the runtime RMW, which is Fast DDS, see §6) → `unitree-ros2-dls/ros2_ws` → `muse/muse_ws` → `piper-ros2-dls/ros2_ws` → `ros2_ws` (`haptic_teleoperation`) → anything in `EXTRA_ROS_WORKSPACES`. Details (duplicate-package handling, per-package build quirks): below.
-
-```bash
-./attach.sh              # open a container shell — every deploy terminal starts here
-./check.sh                # validate installs, imports, and (with --topics) live ROS topics
-./stop.sh / ./start.sh    # stop/resume, container persists
-./remove-container.sh && ./start.sh   # recreate after changing .env or mounts
-```
-
-## 4. Standalone MuJoCo test
-
-Runs the policy directly in MuJoCo, no ROS 2 simulator process.
-
-```bash
-./attach.sh
-cd /workspace/locoman_vla_deploy/locomanipulation-teleop-isaaclab
-python3 deploy/play_mujoco.py
-```
-
-In the console: `ictp` for keyboard control (`w`/`s` forward-back, `a`/`d` strafe, `q`/`e` yaw, `0` zero). Do not run this alongside `run_simulator_ros2.py`.
-
-## 5. ROS 2 MuJoCo sim-to-sim
-
-Two attached terminals:
-
-```bash
-# Terminal 1 — simulator
-source deploy/ros2_localhost_connect.sh
-python3 deploy/run_simulator_ros2.py
-
-# Terminal 2 — controller
-source deploy/ros2_localhost_connect.sh
-python3 deploy/run_controller_ros2.py
-```
-
-Controller console: `goUp` → `activateRL` → `ictp`.
-
-```text
-simulator  --/blind_state, /base_state, /arm_state-->  controller
-controller --/trajectory_generator, /arm_trajectory_generator-->  simulator
-```
-
-`ros2_localhost_connect.sh` is sim-only — never source it for physical-robot deployment.
-
-## 6. Physical robot deployment
-
-`attach.sh` already sets `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp` and `ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET` (Jazzy's replacement for `ROS_LOCALHOST_ONLY`, which is unset), and pins CycloneDDS's `NetworkInterface` to `CYCLONEDDS_SUBNET` (defaults to the Go2 onboard network, `192.168.123.0`) via a generated `CYCLONEDDS_URI`, with multicast discovery enabled — this requires multicast to be enabled on the Mikrotik router for that subnet. Note: an earlier version of this deployment moved off CycloneDDS to Fast DDS after a confirmed `ros2 topic list` hang on the Go2's large native DDS graph (see §8) — CycloneDDS is back as the default as of this revision, so re-verify that behavior on real hardware before relying on it. The Fast DDS interface-pinning logic (`FASTRTPS_DEFAULT_PROFILES_FILE`, generated from `ROBOT_NET_IFACE`) in `dls-env` is now dead code under CycloneDDS and left in place only in case of a future rollback. One attached terminal per process; keep the robot supported for the first test.
-
-**Terminal 1 — Go2 HAL**
-```bash
-./attach.sh
-run-go2-hal   # ≈ python3 unitree-ros2-dls/launch_go2_hal.py
-```
-
-**Terminal 2 — MUSE state estimator**
-```bash
-./attach.sh
-run-muse   # ≈ ros2 launch state_estimator state_estimator.launch.py
-```
-
-**Verify the state pipeline** (`/lowstate → go2_hal → /blind_state → MUSE → /base_state`) before going further — `ros2 topic list` is slow on the Unitree DDS graph, so check known topics directly:
-
-```bash
-timeout 15 ros2 topic echo /blind_state dls2_interface/msg/BlindState --once --qos-reliability best_effort
-timeout 15 ros2 topic echo /base_state  dls2_interface/msg/BaseState  --once --qos-reliability best_effort
-timeout 10 ros2 topic hz /blind_state --qos-reliability best_effort
-timeout 10 ros2 topic hz /base_state  --qos-reliability best_effort
-```
-
-Don't start the controller until both topics carry finite, plausible values.
-
-**Terminal 3 — policy controller**
-```bash
-./attach.sh
-run-controller   # ≈ python3 locomanipulation-teleop-isaaclab/deploy/run_controller_ros2.py
-```
-`goUp` first — check joint directions, symmetry, smooth motion. Then, with zero velocity commanded, `activateRL`. Let it stand under policy control before commanding locomotion.
-
-**Terminal 4 — joystick**
-```bash
-./attach.sh
-run-joy   # ≈ ros2 launch teleop_twist_joy teleop-launch.py joy_config:=xbox
-```
-Verify with `ros2 topic echo /joy sensor_msgs/msg/Joy`.
-
-| Control | Action |
+| Script | Purpose |
 |---|---|
-| D-pad up / down | `goUp` / `goDown` |
-| `+` | Toggle RL policy |
-| Left stick | Forward/back, strafe |
-| Right stick horizontal | Yaw |
+| `build-image.sh` | Build the workstation image. |
+| `start.sh` | Create or resume the container from `.env`. |
+| `build-workspaces.sh [--clean]` | Build all ROS 2 workspaces inside the container. |
+| `attach.sh` | Open a shell in the container with the environment sourced. |
+| `check.sh [--topics]` | Check installs, Python imports and ROS packages. |
+| `deploy-leader.sh` | Activate CAN and attach to the leader teleoperation session. |
+| `stop.sh`, `remove-container.sh` | Stop, or remove the container (needed after changing `.env` or mounts). |
 
-Press D-pad up once and let the stand-up interpolation finish before toggling RL.
+Robot (`docker/jetson/`). The first three run on the workstation and reach the robot over ssh; the others run on the robot.
 
-## 7. Arm teleoperation
+| Script | Purpose |
+|---|---|
+| `install-robot.sh` | One-time installation: ssh key, clone, base and robot images, container, workspaces. |
+| `deploy-robot.sh` | Activate CAN and attach to the follower teleoperation session. |
+| `deploy-vla.sh` | Activate CAN and attach to the policy-deployment session. |
+| `build-image.sh`, `start.sh`, `attach.sh`, `stop.sh`, `remove-container.sh` | Image and container management on the robot. |
 
-The Piper HAL (`piper-ros2-dls`) is built automatically — no `EXTRA_ROS_WORKSPACES` entry needed. Real-hardware teleoperation needs three processes: one on the **host** (CAN activation), two inside the **container**.
+## Container commands
 
-### One-command leader–follower deploy
+Installed in `/usr/local/bin`. The session and deploy scripts run them from the mounted repository, so script changes apply without rebuilding the image.
 
-Two machines, two images: the **laptop image** (`locoman-vla-jazzy`, this directory) runs the leader stack; the **jetson image** (`locoman-vla-jetson`, [`jetson/`](./jetson/)) runs the follower stack on the Go2's Jetson.
+| Command | Purpose |
+|---|---|
+| `dls-env` | Environment sourced by every shell: ROS overlays, CycloneDDS configuration, discovery range. |
+| `build-dls-workspaces` / `build-jetson-workspaces` | Workspace builds for the workstation and robot images. |
+| `build-extra-workspace <path>` | Build an additional workspace inside the mounted tree. |
+| `run-go2-hal`, `run-muse`, `run-controller`, `run-joy` | Locomotion stack processes. |
+| `run-piper-hal` | DLS2 arm bridge publishing `/arm_state` (used by the simulation controller path, not by teleoperation). |
+| `can-activate [can_name] [bitrate]` | Bring up the arm CAN interface from inside the container. |
+| `teleop-session <leader\|robot>` | tmux session with the leader or follower teleoperation stack. |
+| `vla-session` | tmux session with the robot-side policy-deployment stack. |
+| `check-stack` | Back end of `check.sh`. |
 
-```bash
-# One-time robot install (from the laptop; Jetson needs Docker + NVIDIA
-# container toolkit + jetson-containers preinstalled):
-cd jetson && cp jetson.env.example .env   # TODO: set RealSense camera serials
-./install-robot.sh
+## Configuration
 
-# Deploy (each attaches to a tmux session, one window per launch; C-b d detaches):
-jetson/deploy-robot.sh   # follower: arm ctrl + PD+g + two RealSense cameras (over ssh)
-./deploy-leader.sh       # leader:   arm ctrl + PD+g + p2p_teleoperation + joy joint ctrl
-```
+Copy `.env.example` to `.env` (workstation) and `jetson/jetson.env.example` to `jetson/.env` (robot).
 
-Details:
-- `install-robot.sh` is idempotent: ssh key setup (`ssh-copy-id`, default password `123`) → clone/update this repo on the robot with only the `piper-ros2-dls` submodule → copy `.env` → `jetson-containers build ros:jazzy-ros-base` if the base image is missing → `jetson/build-image.sh` → `jetson/start.sh` → `build-jetson-workspaces` in the container. GitHub access from the robot uses ssh agent forwarding, so your laptop's key must be loaded (`ssh-add -l`).
-- The jetson image builds only the follower packages (`piper_sdk`, `agx_arm_msgs`, `agx_arm_description`, `agx_arm_ctrl`, `agx_arm_pd_g_controller`, plus `haptic_teleoperation`) — no MoveIt or dls2 bridge. rviz2 is installed because `display.launch.py` hard-requires it; headless it simply exits while the arm nodes keep running.
-- CAN activation runs inside the privileged container (`docker exec <name> can-activate`) on both sides — no host `sudo`. Re-run it (or just re-run the deploy script) after power-cycling an arm.
-- `teleop-session <leader|robot>` (in both images) creates the tmux session; re-running attaches to it. Kill everything with `C-b : kill-session`, or `jetson/stop.sh` / `./stop.sh`.
-- Camera serial numbers come from `GRIPPER_CAMERA_SERIAL` / `WORLD_CAMERA_SERIAL` in `jetson/.env` (TODO: fill in; find them with `rs-enumerate-devices -s` on the robot). They are baked into the container environment — after changing them run `jetson/remove-container.sh` then `jetson/start.sh` (or re-run `install-robot.sh`).
-- `haptic_teleoperation` is vendored in `ros2_ws/src` (from `dls_ros2_manipulation` @ `b03365e`) and built through the top-level `ros2_ws`.
+| Variable | Image | Meaning |
+|---|---|---|
+| `HOST_WORKSPACE` | workstation | Host path of this repository; empty uses the current checkout. |
+| `ROBOT_NET_IFACE` | both | Interface connected to the robot network. |
+| `ROS_DOMAIN_ID` | both | Must match on both machines. |
+| `CYCLONEDDS_SUBNET` | both | Subnet CycloneDDS binds to; empty means `192.168.123.0`. |
+| `COLCON_JOBS` | both | Parallel colcon workers. |
+| `ENABLE_X11` | workstation | Forward X11 for the MuJoCo viewer. |
+| `EXTRA_ROS_WORKSPACES` | workstation | Colon-separated container paths of extra workspaces to build and source. |
+| `CONTROLLER_RT_PRIORITY` | workstation | Real-time priority for `run-controller` (0 disables). |
+| `ROBOT_HOST`, `ROBOT_USER`, `ROBOT_WORKSPACE` | robot | ssh target and clone location on the robot. |
+| `JETSON_CONTAINERS_DIR`, `BASE_IMAGE` | robot | jetson-containers checkout and the base image it produces. |
+| `GRIPPER_CAMERA_SERIAL`, `WORLD_CAMERA_SERIAL` | robot | RealSense serial numbers (`rs-enumerate-devices -s`). |
 
-The manual equivalents follow.
+Variables are passed to the container when it is created. After editing `.env`, recreate it with `remove-container.sh && start.sh`; on the robot, re-running `install-robot.sh` does this too.
 
-**Host — activate the CAN interface** (requires `sudo`, physical CAN adapter plugged in):
-```bash
-cd piper-ros2-dls/ros2_ws/src/agx_arm_ros/scripts
-sudo bash ./can_activate.sh
-```
-Brings `can0` up at 1 Mbit/s. The container shares the host network (`--network host`), so it's visible immediately. Re-run any time the arm is power-cycled or the interface drops.
+## Workspace build
 
-**Terminal 1 — arm controller**
-```bash
-./attach.sh
-ros2 launch agx_arm_ctrl start_single_agx_arm_rviz.launch.py \
-    namespace:=follower tcp_offset:='[0.0, 0.0, 0.14, 0.0, 0.0, 0.0]' \
-    arm_type:=piper_l effector_type:=agx_gripper
-```
+`build-workspaces.sh` builds, in order:
 
-**Terminal 2 — gravity-compensated PD controller**
-```bash
-./attach.sh
-ros2 launch agx_arm_pd_g_controller pd_g_controller.launch.py \
-    namespace:=follower enable_gravity_compensation:=true use_gripper:=true
-```
+1. `unitree-ros2-dls/unitree_ros2/cyclonedds_ws`: Unitree message definitions.
+2. `unitree-ros2-dls/ros2_ws`: Go2 HAL and the canonical `dls2_interface`.
+3. `muse/muse_ws`: MUSE, without its own copies of `unitree_go` and `dls2_interface`, and without Point-LIO.
+4. `piper-ros2-dls/ros2_ws`: Piper arm packages. Its `dls2_interface` is an incomplete stub and is never built.
+5. `ros2_ws`: `haptic_teleoperation`.
+6. Each workspace in `EXTRA_ROS_WORKSPACES`.
 
-This is the path `run_controller_ros2.py`/`joystick.py` actually use on real hardware: feedback on `/feedback/joint_states`, arm commands on `/arm_trajectory_generator`/`/arm_control_signal`, gripper commands on `/gripper_controller/joint_trajectory`. Verify with `ros2 topic echo /feedback/joint_states --once` / `ros2 topic hz /feedback/joint_states`.
+`piper_sdk`, `agx_arm_pd_g_controller` and `haptic_teleoperation` are built without `--symlink-install`: the first points its package directory outside the package tree, and the other two generate a parameters module while `setup.py` runs.
 
-`run-piper-hal` (`dls2_piper_bridge` → `/arm_state`) is a separate, optional blind-state path used by the MuJoCo sim-to-sim controller (§5) — not required here, and its self-contained in-container CAN activation hasn't proven reliable; prefer the host-side step above for real hardware.
+The robot image builds only the follower packages (`piper_sdk`, `agx_arm_msgs`, `agx_arm_description`, `agx_arm_ctrl`, `agx_arm_pd_g_controller`, `agx_arm_moveit` for its configuration files) and `haptic_teleoperation`. rviz2 is installed because the arm launch file always declares it; without a display it exits and the arm nodes keep running.
 
-For any other arm package, wire it through `EXTRA_ROS_WORKSPACES` (`docker/.env`) and launch normally: `ros2 launch <arm_package> <launch_file>.launch.py`. Keep arm motion disabled during the first locomotion-only test unless the controller requires it.
+## Robot installation details
 
-## 8. Common issues
+- `install-robot.sh` uses the workstation's `origin` URL and current branch, and refuses to run if that branch is not pushed. With an ssh `origin`, GitHub access from the robot uses ssh agent forwarding, so your key must be loaded (`ssh-add -l`).
+- The first run asks for the robot's ssh password once (Unitree default: `123`).
+- Only the `piper-ros2-dls` submodule is initialized on the robot.
 
-**`'localhost_only' is enabled` warning** — the shell inherited sim config. `unset ROS_LOCALHOST_ONLY ROS_STATIC_PEERS; export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET`, then relaunch (or just re-run `attach.sh`, which sets this correctly).
+## Troubleshooting
 
-**`ros2 topic list` hangs** — was slow under an earlier CycloneDDS setup on the Go2's large native DDS graph; switching to Fast DDS previously fixed it on the real robot. CycloneDDS is the default again as of this revision — if the hang reappears, check for a stale `RMW_IMPLEMENTATION` in the shell first, and fall back to Fast DDS (`RMW_IMPLEMENTATION=rmw_fastrtps_cpp`) if needed. Fallback for checking topics without listing: check known topics directly (see §6).
+**Root-owned build artifacts.** The containers run as root. To restore ownership on the host after stopping all processes: `sudo chown -R "$(id -u):$(id -g)" <repository>`.
 
-**`Failed to parse type hash for topic ... USER_DATA '(null)'`** — seen previously under CycloneDDS; native Unitree DDS endpoints lack Jazzy type-hash metadata. Noisy but harmless, didn't block `/lowstate`, `/blind_state`, `/base_state`. Watch for a recurrence now that CycloneDDS is the default again.
+**`AMENT_TRACE_SETUP_FILES: unbound variable`.** Scripts that source ROS setup files must use `set -eo pipefail`, not `set -u`.
 
-**`/lowstate` works but `/blind_state` doesn't** — the Go2 HAL subscription must use `rclcpp::SensorDataQoS()`. Already patched in the pinned `jazzy-deploy` submodule.
+**MUSE cannot find Pinocchio headers.** MUSE must link the imported `pinocchio::pinocchio` target, as the pinned submodule does. The image also needs `liburdfdom-headers-dev`.
 
-Container/build-level issues (image build, workspace build failures, Piper's stub `dls2_interface`, `piper_sdk` symlink-install, permissions, joystick device mounts) are in `docker/README.md`.
+**Joystick not visible.** Check `ls -l /dev/input` and `ros2 run joy joy_enumerate_devices`. Recreate the container if the device was connected after it started.
 
-## 9. Updating
+**`ModuleNotFoundError: ..._parameters`.** A package that uses `generate_parameter_library_py` was built with `--symlink-install`. Rebuild with `build-workspaces.sh --clean`.
 
-```bash
-git pull
-git submodule sync --recursive
-git submodule update --init --recursive
-```
-
-After pushing a change inside a submodule, commit its new pointer in the parent repo too:
-
-```bash
-cd <submodule> && git add . && git commit -m "..." && git push
-cd .. && git add <submodule> && git commit -m "Update <submodule>" && git push
-```
-
-Never commit generated `build/`, `install/`, `log/`, `docker/.env`, or exported image archives.
-
-## 10. Validated launch order
-
-```text
-1. Start the Docker container
-2. run-go2-hal
-3. run-muse
-4. Verify /blind_state and /base_state
-5. run-controller
-6. goUp
-7. activateRL with zero velocity
-8. run-joy
-9. Test one axis at a time
-10. Start arm teleoperation only after locomotion is stable
-```
+**rosdep fails with missing apt packages.** The images remove the apt lists. `build-jetson-workspaces` refreshes them; elsewhere, run `apt-get update` in the container before rosdep.

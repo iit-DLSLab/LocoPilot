@@ -1,5 +1,5 @@
-# Deployment-only Python dependencies from the provided ROS 2 environment.
-# ROS itself is supplied by osrf/ros:jazzy-desktop and Ubuntu packages.
+# Python dependencies of the laptop image. ROS itself comes from
+# osrf/ros:jazzy-desktop and Ubuntu packages.
 numpy<2
 scipy
 tqdm

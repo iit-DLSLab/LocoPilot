@@ -8,38 +8,27 @@ from launch.substitutions import EnvironmentVariable, PythonExpression
 
 
 def generate_launch_description():
-    """Launch the gripper and world RealSense cameras.
+    """Launch the gripper (D435) and world (D405) RealSense cameras.
 
-    Repo-local replacement for manipulation_demo_recorder's
-    two_realsense_cameras.launch.py so the submodule stays untouched.
-    Includes realsense2_camera's rs_launch.py once per camera — the same
-    thing rs_multi_camera_launch.py does internally, minus its
-    camera1->camera2 static transform node, which crashes when both
-    cameras share a node name (frame_id == child_frame_id). Both node
-    names must stay 'realsense_camera_node' because the demo-recorder
-    launches subscribe to /<namespace>/realsense_camera_node/... topics.
+    Includes realsense2_camera's rs_launch.py once per camera. Topics are
+    published under /gripper_camera/realsense_camera_node/... and
+    /world_camera/realsense_camera_node/...
 
-    Configuration comes from environment variables (injected into the
-    container by docker/jetson/start.sh) instead of launch arguments,
-    which rs_launch would warn about as unsupported:
+    Configuration comes from environment variables (set in the container by
+    docker/jetson/start.sh):
 
-        GRIPPER_CAMERA_SERIAL      (default 750612070733)
-        WORLD_CAMERA_SERIAL        (default 130322270336)
+        GRIPPER_CAMERA_SERIAL      (default: reference setup)
+        WORLD_CAMERA_SERIAL        (default: reference setup)
         WORLD_CAMERA_WIDTH/HEIGHT  (default 1280x720, colour and depth)
 
-    The gripper camera runs at 640x480, both cameras at 30 fps.
+    The gripper camera runs at 640x480, both cameras at 30 fps. On the D405
+    the colour sensor belongs to the depth module, so the world camera sets
+    both rgb_camera.color_profile and depth_module.color_profile. The D405
+    keeps auto exposure because colour and depth share one sensor.
 
-    The world camera's colour profile is set both as
-    rgb_camera.color_profile and depth_module.color_profile: on the D405
-    the colour sensor lives under the depth module, on other models
-    under rgb_camera; the unused parameter is ignored.
-
-    Manual white balance / exposure for the gripper camera comes from
-    gripper_camera_extra_params.yaml next to this file (rs_launch has no
-    arguments for those; it warns that they are unsupported but still
-    forwards them to the node, which does support them). The D405 world
-    camera keeps auto exposure: its colour and depth share one sensor,
-    so a manual colour exposure would degrade depth.
+    Parameters rs_launch.py does not expose as launch arguments (manual
+    exposure, best-effort QoS) are passed through the per-camera YAML files
+    next to this file.
     """
     gripper_serial = EnvironmentVariable(
         'GRIPPER_CAMERA_SERIAL', default_value='750612070733',
@@ -70,13 +59,8 @@ def generate_launch_description():
         'world_camera_extra_params.yaml',
     )
 
-    # Launch configurations set by one include leak into the next
-    # (includes share the launch context), so every argument that differs
+    # Includes share the launch context, so every argument that differs
     # between the cameras must be set explicitly in both.
-    # QoS is best-effort for all streamed topics -- set via config_file (see
-    # gripper/world_camera_extra_params.yaml), not launch arguments: rs_launch.py
-    # silently drops launch arguments outside its declared configurable_parameters
-    # list (e.g. 'rgb_camera.color_qos'), so they never reach the node.
     common_arguments = [
         ('camera_name', 'realsense_camera_node'),
         ('enable_color', 'true'),

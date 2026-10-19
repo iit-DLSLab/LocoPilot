@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build the Jetson arm-teleoperation image. Run ON the robot (arm64), after
-# jetson-containers has produced the ros:jazzy-ros-base base image.
-# The build context is the parent docker/ directory so the in-container
-# scripts shared with the laptop image (dls-env, entrypoint, can-activate,
-# teleop-session) can be COPY'd.
+# Build the robot-side image. Run on the robot (arm64), after jetson-containers
+# has produced the ros:jazzy-ros-base base image. The build context is the
+# parent docker/ directory, so scripts shared with the laptop image can be
+# copied in.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/.env" ]]; then

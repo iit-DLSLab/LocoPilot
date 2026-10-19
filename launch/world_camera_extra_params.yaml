@@ -1,10 +1,7 @@
 # Extra parameters for the world camera (D405), passed to realsense2_camera
 # via config_file in two_realsense_cameras.launch.py.
-#
-# Best-effort QoS for the streamed topics. The rs_launch.py 'rgb_camera.color_qos'
-# style launch arguments are silently dropped (they're not in its declared
-# configurable_parameters list, so they never reach the node) -- generic
-# qos_overrides.*, forwarded here via config_file, do reach the node.
+# Best-effort QoS for the streamed topics. rs_launch.py drops QoS launch
+# arguments it does not declare, so they are set here as qos_overrides.
 qos_overrides./color/image_raw.publisher.reliability: best_effort
 qos_overrides./color/camera_info.publisher.reliability: best_effort
 qos_overrides./depth/image_rect_raw.publisher.reliability: best_effort

@@ -1,16 +1,11 @@
-# Extra parameters for the gripper camera (D435), passed to
-# realsense2_camera via config_file1 in two_realsense_cameras.launch.py.
-# rs_multi_camera_launch.py has no per-camera launch arguments for these,
-# so they live here. Values match the old manipulation_demo_recorder
-# launch defaults.
+# Extra parameters for the gripper camera (D435), passed to realsense2_camera
+# via config_file in two_realsense_cameras.launch.py.
 rgb_camera.enable_auto_white_balance: false
 rgb_camera.white_balance: 3200.0
 rgb_camera.exposure: 250
 
-# Best-effort QoS for the streamed topics. The rs_launch.py 'rgb_camera.color_qos'
-# style launch arguments are silently dropped (they're not in its declared
-# configurable_parameters list, so they never reach the node) -- generic
-# qos_overrides.*, forwarded here via config_file, do reach the node.
+# Best-effort QoS for the streamed topics. rs_launch.py drops QoS launch
+# arguments it does not declare, so they are set here as qos_overrides.
 qos_overrides./color/image_raw.publisher.reliability: best_effort
 qos_overrides./color/camera_info.publisher.reliability: best_effort
 qos_overrides./depth/image_rect_raw.publisher.reliability: best_effort

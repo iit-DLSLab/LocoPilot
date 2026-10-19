@@ -32,7 +32,7 @@ def force_reflection_efforts(gain, other_external_torque) -> np.ndarray:
 
     Implements the force channel of the P-P + force-reflection bilateral
     architecture: tau = gain * tau_ext_other, where tau_ext_other is the
-    other arm's own external torque estimate (measured minus gravity torque),
-    cross-fed over the network rather than derived from position error.
+    other arm's external torque estimate, received over ROS rather than
+    derived from position error.
     """
     return np.asarray(gain) * np.asarray(other_external_torque)
