@@ -165,9 +165,37 @@ ros2 launch haptic_teleoperation joy_joint_controller.launch.py
 
 </details>
 
-Camera topics are published under `/gripper_camera/realsense_camera_node/...` and `/world_camera/realsense_camera_node/...` with best-effort QoS. [`scripts/count_joy_button_presses.py`](scripts/count_joy_button_presses.py) counts controller button presses in recorded bags (requires `pip install rosbags`).
+Camera topics are published under `/gripper_camera/realsense_camera_node/...` and `/world_camera/realsense_camera_node/...` with best-effort QoS. Record the session with `ros2 bag record` and export it as described in [Dataset export](#6-dataset-export).
 
-## 6. Policy deployment
+## 6. Dataset export
+
+[`scripts/export_lerobot.py`](scripts/export_lerobot.py) converts recorded teleoperation bags into a [LeRobot](https://github.com/huggingface/lerobot) dataset. It needs `lerobot[dataset]>=0.6`, `rosbags` and `opencv-python`, and runs outside the containers.
+
+```bash
+python scripts/export_lerobot.py <bag_dir> [<bag_dir> ...] \
+    --repo-id <user>/<dataset> --root datasets/<dataset> \
+    --task "Pick the red cube and place it on the blue base"
+```
+
+- **Episodes** are delimited by the handle controller (`/joycon`): button 3 starts an episode, button 2 ends it, and a second start before an end restarts it. `--dry-run` lists the episodes without writing anything.
+- **Frames** are sampled at `--fps` (default 10) on the bag receive clock, holding the latest message of each stream. Header stamps are not used, because the machines' clocks are not synchronized.
+- **`action`** is the 11-D command `[vx, vy, wz, pitch, joint1..joint6, gripper]`. The arm part is the follower command (`/follower/control/move_mit_joint_states`) and the gripper part is the `joy_joint_controller` reference. The base part is read from a recorded command topic if configured; otherwise it is replayed from `/joy` with the locomotion controller's filter.
+- **`observation.state`** holds the follower joint and gripper positions, plus the base linear and angular velocity and orientation from MUSE.
+- **`observation.images.*`** holds the wrist and head colour streams and depth in millimetres (`--no-depth` to skip depth).
+- **Language:** `--task` sets one instruction for all episodes; `--tasks-file` maps bag names to an instruction or to a list with one entry per episode.
+
+Topics and mappings can be overridden with `--config <file.yaml>` (see `DEFAULT_CONFIG` in the script). For example, to read body pitch from a joystick axis:
+
+```yaml
+base_command:
+  pitch_axis: 4        # stick axis on /joy
+  pitch_mode: rate     # rate: integrate the axis; absolute: map it directly
+  pitch_scale: 0.5     # rad/s (rate) or rad (absolute) at full deflection
+```
+
+Bags recorded before the gripper moved to button 8 need `--gripper-button 7`.
+
+## 7. Policy deployment
 
 For autonomous operation, the operator-side stack is replaced by a policy. The robot-side session keeps the same arm driver and cameras, and swaps the PD+gravity teleoperation controller for joint trajectory controllers:
 
@@ -183,7 +211,7 @@ docker/jetson/deploy-vla.sh
 
 A policy sends arm and gripper joint references as `trajectory_msgs/JointTrajectory` to these controllers. They interpolate the references at the controller rate and forward them to the arm. The locomotion stack of §4 is unchanged.
 
-## 7. Simulation
+## 8. Simulation
 
 The workstation image can also run the locomotion policy without hardware.
 
