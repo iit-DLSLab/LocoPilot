@@ -21,12 +21,13 @@ check_path "DLS HAL install" "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash"
 check_path "GO2 HAL executable" "$UNITREE_DLS_ROOT/ros2_ws/install/go2_hal/bin/go2_hal"
 check_path "MUSE install" "$MUSE_ROOT/muse_ws/install/setup.bash"
 check_path "Piper install" "$PIPER_ROOT/ros2_ws/install/setup.bash"
+check_path "Teleoperation install" "$WORKSPACE_ROOT/ros2_ws/install/setup.bash"
 
 printf '\nEnvironment:\n'
 printf '  RMW_IMPLEMENTATION=%s\n' "${RMW_IMPLEMENTATION:-}"
 printf '  ROS_DOMAIN_ID=%s\n' "${ROS_DOMAIN_ID:-}"
 printf '  ROBOT_NET_IFACE=%s\n' "${ROBOT_NET_IFACE:-}"
-printf '  FASTRTPS_DEFAULT_PROFILES_FILE=%s\n' "${FASTRTPS_DEFAULT_PROFILES_FILE:-}"
+printf '  CYCLONEDDS_URI=%s\n' "${CYCLONEDDS_URI:-}"
 
 printf '\nPython imports:\n'
 python - <<'PY' || status=1
@@ -39,7 +40,7 @@ PY
 
 if [[ -f "$UNITREE_DLS_ROOT/ros2_ws/install/setup.bash" ]]; then
     printf '\nROS packages:\n'
-    for pkg in rmw_cyclonedds_cpp dls2_interface go2_hal state_estimator dls2_piper_bridge; do
+    for pkg in rmw_cyclonedds_cpp dls2_interface go2_hal state_estimator agx_arm_ctrl agx_arm_pd_g_controller haptic_teleoperation; do
         if ros2 pkg prefix "$pkg" >/dev/null 2>&1; then
             printf '  [OK] %s -> %s\n' "$pkg" "$(ros2 pkg prefix "$pkg")"
         else
