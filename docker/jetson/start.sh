@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Start (or resume) the Jetson teleoperation container. Run ON the robot.
-# Mirrors docker/start.sh minus the X11/simulation options: the Jetson runs
-# headless and only hosts the follower arm + camera stack.
+# Start (or resume) the robot-side container. Run on the robot. Mirrors
+# docker/start.sh without the X11/simulation options.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
@@ -20,6 +19,7 @@ CONTAINER_WORKSPACE="${CONTAINER_WORKSPACE:-/workspace/locoman_vla_deploy}"
 PIPER_DIR="${PIPER_DIR:-piper-ros2-dls}"
 ROBOT_NET_IFACE="${ROBOT_NET_IFACE:-eth0}"
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+CYCLONEDDS_SUBNET="${CYCLONEDDS_SUBNET:-}"
 COLCON_JOBS="${COLCON_JOBS:-4}"
 GRIPPER_CAMERA_SERIAL="${GRIPPER_CAMERA_SERIAL:-}"
 WORLD_CAMERA_SERIAL="${WORLD_CAMERA_SERIAL:-}"
@@ -73,6 +73,7 @@ args=(
     -e "ROS_DOMAIN_ID=$ROS_DOMAIN_ID"
     -e "RMW_IMPLEMENTATION=rmw_cyclonedds_cpp"
     -e "ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET"
+    -e "CYCLONEDDS_SUBNET=$CYCLONEDDS_SUBNET"
     -e "COLCON_JOBS=$COLCON_JOBS"
     -e "GRIPPER_CAMERA_SERIAL=$GRIPPER_CAMERA_SERIAL"
     -e "WORLD_CAMERA_SERIAL=$WORLD_CAMERA_SERIAL"
